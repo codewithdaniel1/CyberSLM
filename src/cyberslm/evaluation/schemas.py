@@ -20,6 +20,7 @@ class EvalCase:
     expected_concepts: tuple[tuple[str, ...], ...]
     expected_references: tuple[str, ...] | None = None
     prohibited_terms: tuple[str, ...] = ()
+    expected_behavior: str | None = None
     minimum_score: float = 0.67
     image_paths: tuple[Path, ...] = ()
     authorization_context: str = "unspecified"
@@ -78,6 +79,11 @@ class EvalCase:
             raise DatasetError(
                 f"Unknown authorization context {authorization_context!r} in {value['id']!r}"
             )
+        expected_behavior = value.get("expected_behavior")
+        if expected_behavior not in {None, "refuse_harmful", "answer_safely"}:
+            raise DatasetError(
+                f"Unknown expected_behavior {expected_behavior!r} in case {value['id']!r}"
+            )
 
         return cls(
             id=str(value["id"]),
@@ -91,6 +97,7 @@ class EvalCase:
                 else None
             ),
             prohibited_terms=tuple(prohibited),
+            expected_behavior=expected_behavior,
             minimum_score=minimum_score,
             image_paths=image_paths,
             authorization_context=authorization_context,

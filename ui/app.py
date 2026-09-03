@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -187,6 +189,8 @@ if "selected_authorization" not in st.session_state:
     )
 if "delete_confirmation" not in st.session_state:
     st.session_state.delete_confirmation = None
+if "active_generation_id" not in st.session_state:
+    st.session_state.active_generation_id = None
 
 
 with st.sidebar:
@@ -318,13 +322,34 @@ with st.sidebar:
         f'<span style="padding-left: 1.05rem">{knowledge_label}</span></div>',
         unsafe_allow_html=True,
     )
-    if knowledge_count:
-        with st.expander("Knowledge details"):
+    if health.get("rag_enabled"):
+        with st.expander("Knowledge and updates"):
             for source in knowledge_status.get("sources", []):
                 st.markdown(
                     f"**{source['name']} {source['version']}**  \n"
                     f"{source['document_count']:,} indexed documents"
                 )
+            sync_status = api_request("GET", "/api/knowledge/sync")
+            if sync_status["status"] == "running":
+                st.info(sync_status["message"])
+                if sync_status["total"]:
+                    st.progress(
+                        min(sync_status["completed"] / sync_status["total"], 1.0)
+                    )
+                if st.button("Refresh update status", use_container_width=True):
+                    st.rerun()
+            elif sync_status["status"] == "failed":
+                st.error(sync_status.get("error") or sync_status["message"])
+            elif sync_status["status"] == "complete":
+                st.success(sync_status["message"])
+            if st.button(
+                "Sync verified knowledge",
+                disabled=sync_status["status"] == "running",
+                help="Downloads pinned sources, verifies hashes, and resumes local embeddings.",
+                use_container_width=True,
+            ):
+                api_request("POST", "/api/knowledge/sync")
+                st.rerun()
             st.code(
                 "uv run cyberslm-knowledge sync\nuv run cyberslm-knowledge verify",
                 language="bash",
@@ -386,6 +411,17 @@ if selected["key"] in {"offensive", "ctf"} and authorization["key"] == "unspecif
         "Set the environment context before requesting operational offensive or CTF guidance."
     )
 
+if st.session_state.active_generation_id and st.button(
+    "Stop generating",
+    key="cancel-active-generation",
+    icon=":material/stop_circle:",
+    type="primary",
+):
+    with suppress(RuntimeError):
+        api_request("DELETE", f"/api/generations/{st.session_state.active_generation_id}")
+    st.session_state.active_generation_id = None
+    st.rerun()
+
 messages = conversation.get("messages", [])
 if not messages:
     st.markdown("### What are we investigating?")
@@ -423,46 +459,62 @@ if prompt:
             st.image(upload.getvalue(), caption=upload.name, width=480)
         st.markdown(prompt)
 
-    selected_sources = []
-    if health.get("rag_enabled"):
-        try:
-            selected_sources = api_request(
-                "GET",
-                "/api/knowledge/search",
-                params={"q": prompt, "mode": selected["key"], "limit": 4},
-            )
-        except RuntimeError:
-            selected_sources = []
-    if selected_sources:
-        with st.expander(f"{len(selected_sources)} local source(s) selected", expanded=True):
-            for source in selected_sources:
-                st.markdown(
-                    f"[{source['title']}]({source['url']})  \n"
-                    f"{source['source_key']} {source['source_version']} · "
-                    f"{source['retrieval_method']}"
+    stream_state = {"completed": False}
+    try:
+        with httpx.Client(timeout=TIMEOUT) as client, client.stream(
+            "POST",
+            f"{API_URL}/api/conversations/{conversation['id']}/messages/stream",
+            data={
+                "content": prompt,
+                "mode": selected["key"],
+                "authorization_context": authorization["key"],
+            },
+            files=files,
+        ) as response:
+            response.raise_for_status()
+            lines = response.iter_lines()
+            first = json.loads(next(lines))
+            if first.get("type") != "start":
+                raise RuntimeError("The local generation stream did not start correctly.")
+            st.session_state.active_generation_id = first["generation_id"]
+            selected_sources = first.get("knowledge", [])
+            if selected_sources:
+                with st.expander(
+                    f"{len(selected_sources)} local source(s) selected",
+                    expanded=True,
+                ):
+                    for source in selected_sources:
+                        st.markdown(
+                            f"[{source['title']}]({source['url']})  \n"
+                            f"{source['source_key']} {source['source_version']} · "
+                            f"{source['retrieval_method']}"
+                        )
+
+            with st.chat_message("assistant", avatar="assistant"):
+                st.button(
+                    "Stop generating",
+                    key="cancel-active-generation",
+                    icon=":material/stop_circle:",
                 )
 
-    with (
-        st.chat_message("assistant", avatar="assistant"),
-        st.spinner("Analyzing locally… First model load can take a few minutes."),
-    ):
-        completed = False
-        try:
-            result = api_request(
-                "POST",
-                f"/api/conversations/{conversation['id']}/messages",
-                data={
-                    "content": prompt,
-                    "mode": selected["key"],
-                    "authorization_context": authorization["key"],
-                },
-                files=files,
-            )
-            st.markdown(result["assistant"]["content"])
-            completed = True
-        except RuntimeError as error:
-            st.error(str(error), icon="⚠️")
-    if completed:
+                def tokens():
+                    for line in lines:
+                        event = json.loads(line)
+                        if event["type"] == "token":
+                            yield event["text"]
+                        elif event["type"] == "done":
+                            stream_state["completed"] = True
+                        elif event["type"] == "cancelled":
+                            return
+                        elif event["type"] == "error":
+                            raise RuntimeError(event.get("detail", "Local generation failed"))
+
+                st.write_stream(tokens())
+    except (httpx.HTTPError, RuntimeError, StopIteration, ValueError) as error:
+        st.error(str(error), icon="⚠️")
+    finally:
+        st.session_state.active_generation_id = None
+    if stream_state["completed"]:
         st.rerun()
 
 if messages:

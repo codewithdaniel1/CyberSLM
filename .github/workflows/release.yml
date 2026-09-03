@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install and test
+        run: |
+          uv sync --locked --extra dev
+          uv run ruff check .
+          uv run pytest
+
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          uv run python -c 'import os, cyberslm; assert os.environ["RELEASE_TAG"] == "v" + cyberslm.__version__'
+
+      - name: Build packages and checksums
+        run: |
+          uv build
+          sha256sum dist/* > SHA256SUMS
+
+      - name: Attest public-repository packages
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: "dist/*"
+
+      - name: Publish tag assets to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* SHA256SUMS --verify-tag --generate-notes

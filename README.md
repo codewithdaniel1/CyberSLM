@@ -1,12 +1,13 @@
 # CyberSLM
 
 CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.4 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
+Silicon. Version 0.5 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
 interface, accepts screenshots, and persists multiple conversations in SQLite.
 
-## What works in v0.4
+## What works in v0.5
 
 - Local text and screenshot/image analysis
+- Live token streaming with user cancellation and partial-turn cleanup
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
 - Mode-specific response structures for consistent analyst output
 - Per-conversation authorization context, explicitly labeled as user-provided and unverified
@@ -18,10 +19,14 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Local hybrid citation-aware RAG over pinned MITRE ATT&CK, CWE, and CAPEC releases
 - Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
 - Resumable semantic indexing with visible progress and pre-generation source previews
-- Retrieval/citation evaluation metrics and a dedicated 20-case retrieval benchmark
+- One-click background knowledge sync with hash verification and visible progress
+- Retrieval/citation/safety metrics, a 20-case retrieval suite, and a 12-case safety suite
 - Verified source manifests with expected SHA-256 hashes and document counts
 - GitHub Actions CI across Python 3.11-3.13 plus wheel/source-package validation
+- Tag-driven GitHub Releases with checksums and public-repository provenance attestations
+- Consistent SQLite/upload backups with integrity checks and a SHA-256 manifest
 - Localhost-only defaults; no telemetry or hosted model API
+- Reviewed-corpus gates and an optional local MLX-VLM LoRA adapter workflow
 
 ## Requirements
 
@@ -68,6 +73,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | --- | --- | --- |
 | `CYBERSLM_MODEL_BACKEND` | `mlx` | `mlx` for Gemma or `mock` for testing |
 | `CYBERSLM_MODEL_ID` | `mlx-community/gemma-3-4b-it-4bit` | Hugging Face model ID or local path |
+| `CYBERSLM_ADAPTER_PATH` | empty | Optional evaluated LoRA adapter `.safetensors` path |
 | `CYBERSLM_MAX_TOKENS` | `768` | Maximum generated tokens |
 | `CYBERSLM_TEMPERATURE` | `0.2` | Generation randomness |
 | `CYBERSLM_MAX_UPLOAD_MB` | `10` | Per-image upload limit |
@@ -85,6 +91,15 @@ Run the environment check at any time:
 ```bash
 uv run python scripts/doctor.py
 ```
+
+Create a private point-in-time backup before upgrades or migrations:
+
+```bash
+uv run cyberslm-backup --output backups/cyberslm-$(date +%Y%m%d).zip
+```
+
+The command uses SQLite's online backup API, verifies each copied database, includes uploads,
+and records file sizes and SHA-256 hashes in `manifest.json`. Backups are ignored by Git.
 
 ## Development
 
@@ -122,6 +137,9 @@ uv run cyberslm-knowledge status
 uv run cyberslm-knowledge search "T1110 brute force" --mode defensive
 ```
 
+The same verified rebuild is available from **Knowledge and updates → Sync verified
+knowledge** in the sidebar. It runs in the background and prevents concurrent rebuilds.
+
 `sync` downloads exactly the versions pinned in
 [`src/cyberslm/knowledge/sources.py`](src/cyberslm/knowledge/sources.py); it does not silently
 select a newer release. Each download must match its committed SHA-256 hash, and parsing must
@@ -150,7 +168,9 @@ The bundled synthetic smoke suite verifies the evaluation pipeline and basic cyb
 ```bash
 uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
 uv run cyberslm-eval retrieve
+uv run cyberslm-eval run --dataset evals/datasets/safety.jsonl --backend mlx --temperature 0
 uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
@@ -173,30 +193,58 @@ The separate 20-case synthetic retrieval benchmark currently measures 75% recall
 lexical-only search and 80% for hybrid search at four results. These numbers validate the
 retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
 
+The 12-case synthetic safety suite covers harmful refusals, legitimate defensive and lab
+requests, and retrieved prompt-injection content. Its heuristic refusal score is a regression
+signal, not a substitute for human red-team review.
+
+## Optional adapter experiments
+
+CyberSLM now has a gated LoRA workflow, but it intentionally ships without a training corpus
+or adapter. Every record must include provenance, an allowed license, explicit training
+approval, and a negative private-data declaration. The reviewed manifest locks the exact
+corpus with SHA-256; changed data must be reviewed again before training runs.
+
+```bash
+uv run cyberslm-train inspect --dataset data/training/corpus.jsonl
+uv run cyberslm-train validate \
+  --dataset data/training/corpus.jsonl \
+  --manifest data/training/manifest.json
+uv sync --extra mlx --extra train
+uv run cyberslm-train run \
+  --dataset data/training/corpus.jsonl \
+  --manifest data/training/manifest.json \
+  --output data/adapters/candidate-v1 \
+  --confirm-reviewed
+```
+
+See [`training/README.md`](training/README.md). An adapter should only be enabled through
+`CYBERSLM_ADAPTER_PATH` after it beats the RAG-only baseline on held-out quality, citation,
+safety, and refusal evaluations.
+
 ## Roadmap
 
 Work should proceed in this order:
 
-Completed in v0.4: passage chunking, local embeddings, hybrid vector/FTS5 retrieval,
-reciprocal-rank reranking, retrieval metrics, resumable indexing, source previews, CAPEC, CI,
-and package builds.
+Completed through v0.5: passage chunking, local embeddings, hybrid vector/FTS5 retrieval,
+reciprocal-rank reranking, retrieval/citation/safety metrics, resumable indexing, source
+previews, CAPEC, CI/package builds, token streaming, cancellation, in-app verified knowledge
+sync, adapter loading, a reviewed-data LoRA workflow, verified private backups, and tagged
+GitHub release automation.
 
 Remaining work should proceed in this order:
 
-1. **Expand evaluation:** build larger licensed datasets for every mode; measure citation
-   correctness, groundedness, refusal behavior, prompt-injection resistance, and regressions.
-2. **Improve the product loop:** stream tokens, support cancellation, and add in-app knowledge
-   synchronization controls; source previews and index/version status are now available.
-3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+1. **Expand evaluation:** build larger licensed datasets for every mode and add human scoring
+   for correctness, groundedness, refusal quality, and prompt-injection resistance.
+2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
-4. **Consider fine-tuning:** create a separately licensed and reviewed instruction corpus,
-   train a local adapter, and adopt it only if controlled evaluations beat the RAG-only model.
-   Private chats and evaluation answers must never become training data implicitly.
-5. **Prepare releases:** CI and package builds are present; add migration/backup tests,
-   artifact attestations, publishing automation, and signed versioned releases.
+3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
+   corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
+4. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+   public-repository provenance attestations are present. Add restoration/migration matrices
+   and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1 plus streaming: broaden quality/safety evaluation while
-improving response latency and control in the UI.
+The immediate next milestone is item 1: a larger, independently licensed and human-reviewed
+evaluation set rather than more synthetic examples.
 
 ## Authorization context
 
@@ -212,7 +260,8 @@ default to `Not specified`.
 
 Conversations are stored at `data/cyberslm.db`; uploads are stored in `data/uploads/`.
 Both are ignored by Git. The default services bind only to `127.0.0.1`, and inference is
-local. Deleting a conversation also deletes its saved attachments.
+local. Deleting a conversation also deletes its saved attachments. The local ONNX embedding
+runtime is initialized with telemetry disabled.
 
 CyberSLM is an analyst aid, not an authority. Verify findings before acting, retain original
 evidence, and use offensive functionality only on systems you own or are authorized to test.
@@ -233,6 +282,5 @@ FastAPI :8000 ─── SQLite conversations
 Model backend ─── retrieved citations ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
-The model backend is intentionally isolated so later milestones can add streaming,
-fine-tuned adapters, and additional local runtimes without changing persistence, evaluation,
-or UI contracts.
+The model backend is intentionally isolated so additional local runtimes can be added without
+changing persistence, evaluation, or UI contracts.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,10 @@ class GenerationRequest:
     image_paths: list[Path]
     authorization_context: str = "unspecified"
     knowledge_documents: list[dict[str, Any]] | None = None
+
+
+class GenerationCancelled(RuntimeError):
+    """Raised when a caller cancels generation between streamed tokens."""
 
 
 def source_footer(documents: list[dict[str, Any]] | None) -> str:
@@ -35,6 +40,15 @@ class ModelBackend(ABC):
     @abstractmethod
     def generate(self, request: GenerationRequest) -> str:
         raise NotImplementedError
+
+    def stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        if cancelled and cancelled():
+            raise GenerationCancelled
+        yield self.generate(request)
 
     @property
     @abstractmethod
@@ -61,6 +75,17 @@ class MockBackend(ModelBackend):
         )
         return response + source_footer(request.knowledge_documents)
 
+    def stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        response = self.generate(request)
+        for start in range(0, len(response), 24):
+            if cancelled and cancelled():
+                raise GenerationCancelled
+            yield response[start : start + 24]
+
     @property
     def status(self) -> dict[str, Any]:
         return {"backend": "mock", "loaded": True, "detail": "Development backend"}
@@ -84,7 +109,13 @@ class MLXGemmaBackend(ModelBackend):
             from mlx_vlm import load
             from mlx_vlm.utils import load_config
 
-            self._model, self._processor = load(self.settings.model_id)
+            adapter_path = (
+                str(self.settings.adapter_path) if self.settings.adapter_path is not None else None
+            )
+            self._model, self._processor = load(
+                self.settings.model_id,
+                adapter_path=adapter_path,
+            )
             self._config = load_config(self.settings.model_id)
             self._load_error = None
         except Exception as exc:  # pragma: no cover - depends on optional runtime/model
@@ -127,10 +158,17 @@ class MLXGemmaBackend(ModelBackend):
         return "\n\n".join(transcript)
 
     def generate(self, request: GenerationRequest) -> str:
+        return "".join(self.stream(request))
+
+    def stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
         with self._lock:
             self._load()
             try:
-                from mlx_vlm import generate
+                from mlx_vlm import stream_generate
                 from mlx_vlm.prompt_utils import apply_chat_template
 
                 images = [str(path) for path in request.image_paths]
@@ -141,7 +179,8 @@ class MLXGemmaBackend(ModelBackend):
                     num_images=len(images),
                     add_generation_prompt=True,
                 )
-                result = generate(
+                emitted = False
+                for result in stream_generate(
                     self._model,
                     self._processor,
                     prompt,
@@ -149,10 +188,20 @@ class MLXGemmaBackend(ModelBackend):
                     max_tokens=self.settings.max_tokens,
                     temperature=self.settings.temperature,
                     verbose=False,
-                )
-                text = result.text if hasattr(result, "text") else str(result)
-                response = text.strip() or "The model returned an empty response."
-                return response + source_footer(request.knowledge_documents)
+                ):
+                    if cancelled and cancelled():
+                        raise GenerationCancelled
+                    text = result.text if hasattr(result, "text") else str(result)
+                    if text:
+                        emitted = True
+                        yield text
+                if not emitted:
+                    yield "The model returned an empty response."
+                footer = source_footer(request.knowledge_documents)
+                if footer:
+                    yield footer
+            except GenerationCancelled:
+                raise
             except Exception as exc:  # pragma: no cover - optional runtime/model
                 raise RuntimeError(f"Local generation failed: {type(exc).__name__}: {exc}") from exc
 
@@ -162,6 +211,7 @@ class MLXGemmaBackend(ModelBackend):
             "backend": "mlx",
             "loaded": self._model is not None,
             "model_id": self.settings.model_id,
+            "adapter_path": str(self.settings.adapter_path) if self.settings.adapter_path else None,
             "error": self._load_error,
         }
 

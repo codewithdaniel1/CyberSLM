@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from cyberslm.model import GenerationRequest, MLXGemmaBackend, MockBackend
+import pytest
+
+from cyberslm.model import GenerationCancelled, GenerationRequest, MLXGemmaBackend, MockBackend
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
 
@@ -33,6 +35,21 @@ def test_mock_backend_reports_prompt_and_images(tmp_path: Path) -> None:
     assert "Build a timeline" in response
     assert "1 image(s)" in response
     assert backend.status["loaded"] is True
+
+
+def test_mock_backend_streams_and_honors_cancellation() -> None:
+    backend = MockBackend()
+    request = GenerationRequest(
+        mode=MODES["general"],
+        messages=[{"role": "user", "content": "Explain phishing"}],
+        image_paths=[],
+    )
+    chunks = list(backend.stream(request))
+    assert len(chunks) > 1
+    assert "Explain phishing" in "".join(chunks)
+
+    with pytest.raises(GenerationCancelled):
+        list(backend.stream(request, lambda: True))
 
 
 def test_model_prompt_and_response_include_local_references() -> None:

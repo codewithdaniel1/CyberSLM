@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
@@ -79,6 +80,28 @@ def test_rejects_unknown_mode(tmp_path: Path, monkeypatch) -> None:
         json={"mode": "general", "authorization_context": "self-declared-root"},
     )
     assert invalid_context.status_code == 422
+
+
+def test_chat_api_streams_ndjson_and_persists_on_completion(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "db", Database(tmp_path / "api.db"))
+    monkeypatch.setattr(api_module, "model_backend", MockBackend())
+    monkeypatch.setattr(api_module, "knowledge_store", KnowledgeStore(tmp_path / "knowledge.db"))
+    client = TestClient(api_module.app)
+    conversation = client.post("/api/conversations", json={"mode": "general"}).json()
+
+    response = client.post(
+        f"/api/conversations/{conversation['id']}/messages/stream",
+        data={"content": "Explain a firewall", "mode": "general"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert events[0]["type"] == "start"
+    assert any(event["type"] == "token" for event in events)
+    assert events[-1]["type"] == "done"
+
+    loaded = client.get(f"/api/conversations/{conversation['id']}").json()
+    assert [message["role"] for message in loaded["messages"]] == ["user", "assistant"]
 
 
 def test_image_upload_is_saved_and_deleted(tmp_path: Path, monkeypatch) -> None:

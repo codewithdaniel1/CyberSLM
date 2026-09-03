@@ -36,3 +36,11 @@ def test_ui_displays_local_knowledge_status() -> None:
     assert "RAG empty" in source
     assert "local source(s) selected" in source
     assert "retrieval_method" in source
+    assert "Sync verified knowledge" in source
+
+
+def test_ui_uses_cancellable_streaming_generation() -> None:
+    source = (PROJECT_ROOT / "ui" / "app.py").read_text()
+    assert "/messages/stream" in source
+    assert "Stop generating" in source
+    assert "/api/generations/" in source

@@ -42,6 +42,11 @@ class Settings:
     embedding_cache_dir: Path = PROJECT_ROOT / "data" / "knowledge" / "models"
     model_backend: str = os.getenv("CYBERSLM_MODEL_BACKEND", "mlx").lower()
     model_id: str = os.getenv("CYBERSLM_MODEL_ID", "mlx-community/gemma-3-4b-it-4bit")
+    adapter_path: Path | None = (
+        Path(value).expanduser().resolve()
+        if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
+        else None
+    )
     max_tokens: int = _int_env("CYBERSLM_MAX_TOKENS", 768)
     temperature: float = _float_env("CYBERSLM_TEMPERATURE", 0.2)
     api_url: str = os.getenv("CYBERSLM_API_URL", "http://127.0.0.1:8000")

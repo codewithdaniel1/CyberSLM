@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "dataset_version": "REPLACE_AFTER_REVIEW",
+  "base_model": "mlx-community/gemma-3-4b-it-4bit",
+  "reviewer": "REPLACE_AFTER_REVIEW",
+  "reviewed_at": "REPLACE_AFTER_REVIEW",
+  "allowed_licenses": ["REPLACE_AFTER_REVIEW"],
+  "minimum_examples": 50,
+  "sha256": "REPLACE_AFTER_REVIEW"
+}

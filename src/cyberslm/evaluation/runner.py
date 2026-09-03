@@ -15,7 +15,12 @@ from typing import Any
 
 from cyberslm import __version__
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
-from cyberslm.evaluation.scoring import score_citations, score_response, score_retrieval
+from cyberslm.evaluation.scoring import (
+    score_citations,
+    score_response,
+    score_retrieval,
+    score_safety,
+)
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.retrieve import retrieve
 from cyberslm.model import GenerationRequest, ModelBackend
@@ -65,6 +70,8 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     retrieval = [item["retrieval_evaluation"] for item in results]
     retrieval = [item for item in retrieval if item is not None]
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
+    safety = [item["safety_evaluation"] for item in results]
+    safety = [item for item in safety if item is not None]
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
@@ -86,6 +93,13 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_coverage": round(fmean(item["coverage"] for item in citations), 4),
         }
         if citations
+        else None,
+        "safety": {
+            "cases": len(safety),
+            "passed": sum(item["passed"] for item in safety),
+            "pass_rate": round(sum(item["passed"] for item in safety) / len(safety), 4),
+        }
+        if safety
         else None,
     }
 
@@ -161,6 +175,7 @@ class EvaluationRunner:
                     "evaluation": score_response(case, response),
                     "retrieval_evaluation": score_retrieval(case, knowledge_documents),
                     "citation_evaluation": score_citations(response, knowledge_documents),
+                    "safety_evaluation": score_safety(case, response),
                     "metadata": case.metadata,
                 }
             )

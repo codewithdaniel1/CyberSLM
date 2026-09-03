@@ -1,21 +1,29 @@
 from __future__ import annotations
 
+import json
+import threading
 import uuid
+from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from cyberslm.config import settings
 from cyberslm.database import Database
 from cyberslm.knowledge import KnowledgeStore
-from cyberslm.knowledge.embeddings import LocalEmbedder
+from cyberslm.knowledge.embeddings import LocalEmbedder, rebuild_embeddings
+from cyberslm.knowledge.ingest import sync_source
 from cyberslm.knowledge.retrieve import retrieve
-from cyberslm.model import GenerationRequest, create_backend
+from cyberslm.knowledge.sources import SOURCES
+from cyberslm.knowledge.sync_job import KnowledgeSyncManager
+from cyberslm.model import GenerationCancelled, GenerationRequest, create_backend
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
 settings.ensure_directories()
@@ -27,6 +35,9 @@ knowledge_embedder = (
     else None
 )
 model_backend = create_backend(settings)
+knowledge_sync = KnowledgeSyncManager()
+_generation_lock = threading.Lock()
+_generations: dict[str, threading.Event] = {}
 
 
 @asynccontextmanager
@@ -39,7 +50,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="CyberSLM API",
     description="Local-first multimodal cybersecurity assistant",
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -54,6 +65,18 @@ class ConversationUpdate(BaseModel):
     mode: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=120)
     authorization_context: str | None = None
+
+
+@dataclass(slots=True)
+class PreparedMessage:
+    conversation_id: str
+    content: str
+    selected_mode: str
+    selected_authorization: str
+    attachments: list[dict[str, str]]
+    existing: list[dict]
+    request: GenerationRequest
+    knowledge_documents: list[dict]
 
 
 def require_conversation(conversation_id: str) -> dict:
@@ -108,6 +131,182 @@ async def save_image(upload: UploadFile) -> dict[str, str]:
     }
 
 
+def public_knowledge(documents: list[dict]) -> list[dict]:
+    return [
+        {
+            "id": document["id"],
+            "title": document["title"],
+            "url": document["url"],
+            "source_key": document["source_key"],
+            "source_version": document["source_version"],
+            "retrieval_method": document["retrieval_method"],
+        }
+        for document in documents
+    ]
+
+
+def delete_attachments(attachments: list[dict[str, str]]) -> None:
+    for attachment in attachments:
+        Path(attachment["path"]).unlink(missing_ok=True)
+
+
+async def prepare_message(
+    conversation_id: str,
+    content: str,
+    mode: str | None,
+    authorization_context: str | None,
+    images: list[UploadFile] | None,
+) -> PreparedMessage:
+    conversation = require_conversation(conversation_id)
+    selected_mode = mode or conversation["mode"]
+    if selected_mode not in MODES:
+        raise HTTPException(status_code=422, detail="Unknown cyber mode")
+    selected_authorization = authorization_context or conversation["authorization_context"]
+    if selected_authorization not in AUTHORIZATION_CONTEXTS:
+        raise HTTPException(status_code=422, detail="Unknown authorization context")
+    if images and len(images) > 4:
+        raise HTTPException(status_code=413, detail="A maximum of four images is supported")
+
+    attachments: list[dict[str, str]] = []
+    try:
+        for image in images or []:
+            attachments.append(await save_image(image))
+    except Exception:
+        delete_attachments(attachments)
+        raise
+
+    existing = db.list_messages(conversation_id)
+    history = [
+        *existing,
+        {"role": "user", "content": content.strip(), "attachments": attachments},
+    ]
+    active_attachments = attachments
+    if not active_attachments:
+        active_attachments = next(
+            (
+                message["attachments"]
+                for message in reversed(existing)
+                if message["role"] == "user" and message["attachments"]
+            ),
+            [],
+        )
+    knowledge_documents = []
+    if settings.rag_enabled:
+        knowledge_documents = retrieve(
+            knowledge_store,
+            content,
+            selected_mode,
+            limit=settings.rag_results,
+            max_chars=settings.rag_max_chars,
+            embedder=knowledge_embedder,
+        )
+    return PreparedMessage(
+        conversation_id=conversation_id,
+        content=content.strip(),
+        selected_mode=selected_mode,
+        selected_authorization=selected_authorization,
+        attachments=attachments,
+        existing=existing,
+        request=GenerationRequest(
+            get_mode(selected_mode),
+            history,
+            [Path(item["path"]) for item in active_attachments],
+            selected_authorization,
+            knowledge_documents,
+        ),
+        knowledge_documents=knowledge_documents,
+    )
+
+
+def persist_message(prepared: PreparedMessage, response_text: str) -> dict:
+    user_message = db.add_message(
+        prepared.conversation_id,
+        "user",
+        prepared.content,
+        prepared.attachments,
+    )
+    assistant_message = db.add_message(
+        prepared.conversation_id,
+        "assistant",
+        response_text,
+    )
+    updates = {
+        "mode": prepared.selected_mode,
+        "authorization_context": prepared.selected_authorization,
+    }
+    if not prepared.existing:
+        updates["title"] = clean_title(prepared.content)
+    db.update_conversation(prepared.conversation_id, **updates)
+    return {
+        "user": user_message,
+        "assistant": assistant_message,
+        "model": model_backend.status,
+        "knowledge": public_knowledge(prepared.knowledge_documents),
+    }
+
+
+def ndjson_event(event_type: str, **payload: object) -> str:
+    return json.dumps({"type": event_type, **payload}, separators=(",", ":")) + "\n"
+
+
+def rebuild_knowledge(update) -> None:
+    source_dir = settings.knowledge_dir / "sources"
+    source_total = len(SOURCES)
+    for position, source in enumerate(SOURCES.values(), start=1):
+        update(
+            phase="sources",
+            message=f"Verifying and indexing {source.name} {source.version}…",
+            completed=position - 1,
+            total=source_total,
+        )
+        sync_source(knowledge_store, source, source_dir)
+        update(completed=position)
+
+    embedder = LocalEmbedder(
+        settings.rag_embedding_model,
+        settings.embedding_cache_dir,
+        allow_download=True,
+    )
+
+    def embedding_progress(completed: int, total: int) -> None:
+        update(
+            phase="embeddings",
+            message=f"Building local semantic index: {completed:,}/{total:,}",
+            completed=completed,
+            total=total,
+        )
+
+    update(
+        phase="embeddings",
+        message="Checking local semantic index…",
+        completed=0,
+        total=knowledge_store.status()["chunk_count"],
+    )
+    rebuild_embeddings(knowledge_store, embedder, progress=embedding_progress)
+    status = knowledge_store.status()
+    indexed = {item["source_key"]: item for item in status["sources"]}
+    if any(
+        source.key not in indexed
+        or indexed[source.key]["version"] != source.version
+        or indexed[source.key]["sha256"] != source.sha256
+        or indexed[source.key]["document_count"] != source.document_count
+        for source in SOURCES.values()
+    ):
+        raise RuntimeError("Indexed source metadata did not pass verification")
+    embedded = next(
+        (
+            item["count"]
+            for item in status["embedding_models"]
+            if item["model"] == settings.rag_embedding_model
+        ),
+        0,
+    )
+    if settings.rag_semantic_enabled and embedded != status["chunk_count"]:
+        raise RuntimeError(
+            f"Semantic index is incomplete: {embedded}/{status['chunk_count']} passages"
+        )
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -146,7 +345,24 @@ def list_authorization_contexts() -> list[dict]:
 
 @app.get("/api/knowledge/status")
 def knowledge_status() -> dict:
-    return {**knowledge_store.status(), "enabled": settings.rag_enabled}
+    return {
+        **knowledge_store.status(),
+        "enabled": settings.rag_enabled,
+        "sync": knowledge_sync.status(),
+    }
+
+
+@app.get("/api/knowledge/sync")
+def knowledge_sync_status() -> dict:
+    return knowledge_sync.status()
+
+
+@app.post("/api/knowledge/sync", status_code=202)
+def start_knowledge_sync() -> dict:
+    job = knowledge_sync.start(rebuild_knowledge)
+    if job is None:
+        raise HTTPException(status_code=409, detail="Knowledge synchronization is already running")
+    return job
 
 
 @app.get("/api/knowledge/search")
@@ -227,94 +443,80 @@ async def send_message(
     authorization_context: Annotated[str | None, Form()] = None,
     images: Annotated[list[UploadFile] | None, File()] = None,
 ) -> dict:
-    conversation = require_conversation(conversation_id)
-    selected_mode = mode or conversation["mode"]
-    if selected_mode not in MODES:
-        raise HTTPException(status_code=422, detail="Unknown cyber mode")
-    selected_authorization = authorization_context or conversation["authorization_context"]
-    if selected_authorization not in AUTHORIZATION_CONTEXTS:
-        raise HTTPException(status_code=422, detail="Unknown authorization context")
-    if images and len(images) > 4:
-        raise HTTPException(status_code=413, detail="A maximum of four images is supported")
-
-    attachments: list[dict[str, str]] = []
-    try:
-        for image in images or []:
-            attachments.append(await save_image(image))
-    except Exception:
-        for attachment in attachments:
-            Path(attachment["path"]).unlink(missing_ok=True)
-        raise
-
-    existing = db.list_messages(conversation_id)
-    pending_user_message = {
-        "role": "user",
-        "content": content.strip(),
-        "attachments": attachments,
-    }
-    history = [*existing, pending_user_message]
-
-    # Reuse the latest image-bearing turn for questions such as "what about the IP here?"
-    # without sending every screenshot in a long conversation back through the vision encoder.
-    active_attachments = attachments
-    if not active_attachments:
-        active_attachments = next(
-            (
-                message["attachments"]
-                for message in reversed(existing)
-                if message["role"] == "user" and message["attachments"]
-            ),
-            [],
-        )
-    image_paths = [Path(item["path"]) for item in active_attachments]
-    knowledge_documents = []
-    if settings.rag_enabled:
-        knowledge_documents = retrieve(
-            knowledge_store,
-            content,
-            selected_mode,
-            limit=settings.rag_results,
-            max_chars=settings.rag_max_chars,
-            embedder=knowledge_embedder,
-        )
+    prepared = await prepare_message(
+        conversation_id,
+        content,
+        mode,
+        authorization_context,
+        images,
+    )
     try:
         response_text = await run_in_threadpool(
             model_backend.generate,
-            GenerationRequest(
-                get_mode(selected_mode),
-                history,
-                image_paths,
-                selected_authorization,
-                knowledge_documents,
-            ),
+            prepared.request,
         )
     except RuntimeError as exc:
-        for attachment in attachments:
-            Path(attachment["path"]).unlink(missing_ok=True)
+        delete_attachments(prepared.attachments)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return persist_message(prepared, response_text)
 
-    user_message = db.add_message(conversation_id, "user", content.strip(), attachments)
-    assistant_message = db.add_message(conversation_id, "assistant", response_text)
-    updates = {
-        "mode": selected_mode,
-        "authorization_context": selected_authorization,
-    }
-    if not existing:
-        updates["title"] = clean_title(content)
-    db.update_conversation(conversation_id, **updates)
-    return {
-        "user": user_message,
-        "assistant": assistant_message,
-        "model": model_backend.status,
-        "knowledge": [
-            {
-                "id": document["id"],
-                "title": document["title"],
-                "url": document["url"],
-                "source_key": document["source_key"],
-                "source_version": document["source_version"],
-                "retrieval_method": document["retrieval_method"],
-            }
-            for document in knowledge_documents
-        ],
-    }
+
+@app.post("/api/conversations/{conversation_id}/messages/stream")
+async def stream_message(
+    conversation_id: str,
+    content: Annotated[str, Form(min_length=1, max_length=50_000)],
+    mode: Annotated[str | None, Form()] = None,
+    authorization_context: Annotated[str | None, Form()] = None,
+    images: Annotated[list[UploadFile] | None, File()] = None,
+) -> StreamingResponse:
+    prepared = await prepare_message(
+        conversation_id,
+        content,
+        mode,
+        authorization_context,
+        images,
+    )
+    generation_id = uuid.uuid4().hex
+    cancellation = threading.Event()
+    with _generation_lock:
+        _generations[generation_id] = cancellation
+
+    def events() -> Iterator[str]:
+        chunks: list[str] = []
+        completed = False
+        try:
+            yield ndjson_event(
+                "start",
+                generation_id=generation_id,
+                knowledge=public_knowledge(prepared.knowledge_documents),
+            )
+            for chunk in model_backend.stream(prepared.request, cancellation.is_set):
+                chunks.append(chunk)
+                yield ndjson_event("token", text=chunk)
+            response_text = "".join(chunks).strip()
+            if not response_text:
+                response_text = "The model returned an empty response."
+            result = persist_message(prepared, response_text)
+            completed = True
+            yield ndjson_event("done", result=result)
+        except GenerationCancelled:
+            yield ndjson_event("cancelled")
+        except RuntimeError as exc:
+            yield ndjson_event("error", detail=str(exc))
+        finally:
+            if not completed:
+                delete_attachments(prepared.attachments)
+            with _generation_lock:
+                _generations.pop(generation_id, None)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
+
+
+@app.delete("/api/generations/{generation_id}", status_code=202)
+def cancel_generation(generation_id: str) -> dict[str, bool]:
+    with _generation_lock:
+        cancellation = _generations.get(generation_id)
+    if cancellation is None:
+        raise HTTPException(status_code=404, detail="Generation is no longer active")
+    cancellation.set()
+    return {"cancelled": True}

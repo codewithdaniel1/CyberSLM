@@ -14,10 +14,14 @@ privacy, licensing, and reproducibility requirements.
 | Evaluation reports | `evals/results/` | No | Local model outputs and scores |
 | Conversations | `data/cyberslm.db` | No | Private chat history, never training by default |
 | Uploaded screenshots | `data/uploads/` | No | Private conversation attachments |
+| Reviewed training corpus | `data/training/` | No | Explicitly assembled optional LoRA input |
+| Candidate adapters | `data/adapters/` | No | Local experimental weights and metadata |
+| Private backup archives | `backups/` | No | Integrity-checked DB, index, and upload snapshots |
 
-There is currently **no fine-tuning corpus**. CyberSLM 0.3 is specialized through cyber
-mode prompts and retrieval from authoritative local sources. Conversation history and
-evaluation answers are never silently converted into training data.
+There is currently **no shipped fine-tuning corpus or adapter**. CyberSLM 0.5 is specialized
+through cyber prompts and retrieval, not modified weights by default. Its optional adapter
+workflow requires a separately reviewed manifest and corpus; private chat history, uploaded
+evidence, and evaluation answers are never silently converted into training data.
 
 ## Synchronize knowledge
 
@@ -40,6 +44,10 @@ uv run cyberslm-knowledge verify
 uv run cyberslm-knowledge search "failed SSH logins brute force" --mode defensive
 uv run cyberslm-knowledge search "CWE-89 SQL injection" --mode secure_code --json
 ```
+
+The Streamlit sidebar exposes the same operation under **Knowledge and updates**. The API runs
+one background sync at a time, reports source/embedding progress, and preserves the existing
+index if a download or validation fails.
 
 The app still works when the index is absent. The sidebar will say `RAG empty`, and model
 answers will use only Gemma and the selected mode prompt. Set `CYBERSLM_RAG_ENABLED=false`
