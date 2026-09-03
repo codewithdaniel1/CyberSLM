@@ -20,7 +20,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
 - Resumable semantic indexing with visible progress and pre-generation source previews
 - One-click background knowledge sync with hash verification and visible progress
-- Retrieval/citation/safety metrics, a 20-case retrieval suite, and a 12-case safety suite
+- Retrieval/citation/safety metrics, including a licensed 750-case false-refusal suite
 - Verified source manifests with expected SHA-256 hashes and document counts
 - GitHub Actions CI across Python 3.11-3.13 plus wheel/source-package validation
 - Tag-driven GitHub Releases with checksums and public-repository provenance attestations
@@ -169,6 +169,7 @@ The bundled synthetic smoke suite verifies the evaluation pipeline and basic cyb
 uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 uv run cyberslm-eval retrieve
 uv run cyberslm-eval run --dataset evals/datasets/safety.jsonl --backend mlx --temperature 0
 uv run cyberslm-eval run --backend mlx --temperature 0
@@ -196,6 +197,20 @@ retrieval wiring and expose regressions; they are not a broad cybersecurity benc
 The 12-case synthetic safety suite covers harmful refusals, legitimate defensive and lab
 requests, and retrieved prompt-injection content. Its heuristic refusal score is a regression
 signal, not a substitute for human red-team review.
+
+The 750-case CyberSecEval MITRE False Refusal Rate suite adds independently sourced benign
+cyber prompts under the benchmark's MIT license. Its source commit, SHA-256, record count,
+license, and deterministic importer are committed. Run a small model-only sample with:
+
+```bash
+uv run cyberslm-eval run \
+  --dataset evals/datasets/cyberseceval-mitre-frr.jsonl \
+  --backend mlx --temperature 0 --no-rag --limit 25
+```
+
+This adaptation preserves upstream prompts but adds CyberSLM's owned-lab context and uses a
+local phrase-based refusal detector, so results are intended for CyberSLM regression tracking
+rather than direct comparison with published CyberSecEval scores.
 
 ## Optional adapter experiments
 
@@ -233,8 +248,9 @@ GitHub release automation.
 
 Remaining work should proceed in this order:
 
-1. **Expand evaluation:** build larger licensed datasets for every mode and add human scoring
-   for correctness, groundedness, refusal quality, and prompt-injection resistance.
+1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
+   human scoring and independently sourced coverage for correctness, groundedness, refusal
+   quality, prompt-injection resistance, and the other CyberSLM modes.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -243,8 +259,8 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: a larger, independently licensed and human-reviewed
-evaluation set rather than more synthetic examples.
+The immediate next milestone is item 1: human-review an initial external benchmark run and
+define the next independently licensed evaluation slice from its observed gaps.
 
 ## Authorization context
 

@@ -72,6 +72,8 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
     safety = [item["safety_evaluation"] for item in results]
     safety = [item for item in safety if item is not None]
+    answer_safely = [item for item in safety if item["expected_behavior"] == "answer_safely"]
+    false_refusals = sum(item["detected_refusal"] for item in answer_safely)
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
@@ -98,6 +100,11 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "cases": len(safety),
             "passed": sum(item["passed"] for item in safety),
             "pass_rate": round(sum(item["passed"] for item in safety) / len(safety), 4),
+            "answer_safely_cases": len(answer_safely),
+            "false_refusals": false_refusals,
+            "false_refusal_rate": (
+                round(false_refusals / len(answer_safely), 4) if answer_safely else None
+            ),
         }
         if safety
         else None,
@@ -153,6 +160,10 @@ class EvaluationRunner:
             started = time.perf_counter()
             response = self.backend.generate(request)
             latency = time.perf_counter() - started
+            evaluation = score_response(case, response)
+            safety_evaluation = score_safety(case, response)
+            if safety_evaluation is not None:
+                evaluation["passed"] = evaluation["passed"] and safety_evaluation["passed"]
             case_results.append(
                 {
                     "id": case.id,
@@ -172,10 +183,10 @@ class EvaluationRunner:
                         for document in knowledge_documents
                     ],
                     "latency_seconds": round(latency, 4),
-                    "evaluation": score_response(case, response),
+                    "evaluation": evaluation,
                     "retrieval_evaluation": score_retrieval(case, knowledge_documents),
                     "citation_evaluation": score_citations(response, knowledge_documents),
-                    "safety_evaluation": score_safety(case, response),
+                    "safety_evaluation": safety_evaluation,
                     "metadata": case.metadata,
                 }
             )

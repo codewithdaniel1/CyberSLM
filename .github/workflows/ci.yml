@@ -46,6 +46,7 @@ jobs:
           uv run cyberslm-eval validate
           uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
           uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
+          uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 
       - name: Build distribution
         run: uv build

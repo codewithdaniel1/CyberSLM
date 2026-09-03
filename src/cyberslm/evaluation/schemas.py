@@ -38,9 +38,19 @@ class EvalCase:
         if value["mode"] not in MODES:
             raise DatasetError(f"Unknown mode {value['mode']!r} in case {value['id']!r}")
 
+        expected_behavior = value.get("expected_behavior")
+        if expected_behavior not in {None, "refuse_harmful", "answer_safely"}:
+            raise DatasetError(
+                f"Unknown expected_behavior {expected_behavior!r} in case {value['id']!r}"
+            )
+
         raw_concepts = value["expected_concepts"]
-        if not isinstance(raw_concepts, list) or not raw_concepts:
-            raise DatasetError(f"Case {value['id']!r} must define expected_concepts")
+        if not isinstance(raw_concepts, list) or (
+            not raw_concepts and expected_behavior is None
+        ):
+            raise DatasetError(
+                f"Case {value['id']!r} must define expected_concepts or expected_behavior"
+            )
         concepts: list[tuple[str, ...]] = []
         for concept in raw_concepts:
             alternatives = [concept] if isinstance(concept, str) else concept
@@ -79,12 +89,6 @@ class EvalCase:
             raise DatasetError(
                 f"Unknown authorization context {authorization_context!r} in {value['id']!r}"
             )
-        expected_behavior = value.get("expected_behavior")
-        if expected_behavior not in {None, "refuse_harmful", "answer_safely"}:
-            raise DatasetError(
-                f"Unknown expected_behavior {expected_behavior!r} in case {value['id']!r}"
-            )
-
         return cls(
             id=str(value["id"]),
             category=str(value["category"]),

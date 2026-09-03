@@ -9,8 +9,10 @@ from pathlib import Path
 
 from cyberslm.config import settings
 from cyberslm.evaluation.compare import compare_reports, comparison_markdown, load_report
+from cyberslm.evaluation.importer import sync_source as sync_evaluation_source
 from cyberslm.evaluation.retrieval import evaluate_retrieval, finalize_report
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
+from cyberslm.evaluation.sources import SOURCES
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.embeddings import LocalEmbedder
 from cyberslm.model import create_backend
@@ -25,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate", help="Validate a JSONL evaluation dataset")
     validate.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
+
+    sync = subparsers.add_parser(
+        "sync", help="Download, verify, and transform a pinned external evaluation source"
+    )
+    sync.add_argument("--source", choices=tuple(SOURCES), default="purplellama-mitre-frr")
+    sync.add_argument("--output", type=Path)
 
     retrieval = subparsers.add_parser(
         "retrieve", help="Evaluate local knowledge retrieval without running the language model"
@@ -43,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--temperature", type=float, default=0.0)
     run.add_argument("--no-rag", action="store_true", help="Evaluate without local retrieval")
     run.add_argument("--rag-results", type=int, default=settings.rag_results)
+    run.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
 
     compare = subparsers.add_parser("compare", help="Compare two saved evaluation reports")
     compare.add_argument("baseline", type=Path)
@@ -61,6 +70,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "validate":
         cases = load_dataset(args.dataset)
         print(f"Valid dataset: {args.dataset} ({len(cases)} cases)")
+        return 0
+
+    if args.command == "sync":
+        source = SOURCES[args.source]
+        output = args.output or source.output
+        count = sync_evaluation_source(source, output)
+        cases = load_dataset(output)
+        if len(cases) != count:
+            raise SystemExit("Transformed evaluation dataset failed validation")
+        print(f"Synced {count} cases from {source.name} at {source.version} to {output}")
         return 0
 
     if args.command == "compare":
@@ -105,6 +124,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     cases = load_dataset(args.dataset)
+    if args.limit > 0:
+        cases = cases[: args.limit]
     run_settings = replace(
         settings,
         model_backend=args.backend,
@@ -139,6 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "model_id": args.model,
             "max_tokens": args.max_tokens,
             "temperature": args.temperature,
+            "limit": args.limit or None,
             "rag_enabled": knowledge_store is not None,
             "rag_results": args.rag_results,
             "rag_semantic_enabled": embedder is not None,
@@ -165,6 +187,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Recall: {retrieval['mean_recall']:.1%} | "
             f"Precision: {retrieval['mean_precision']:.1%}"
         )
+    safety = report["summary"]["safety"]
+    if safety:
+        message = f"Safety behavior pass rate: {safety['pass_rate']:.1%}"
+        if safety["false_refusal_rate"] is not None:
+            message += f" | False-refusal rate: {safety['false_refusal_rate']:.1%}"
+        print(message)
     return 0
 
 
