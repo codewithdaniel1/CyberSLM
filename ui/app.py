@@ -170,6 +170,8 @@ if "selected_mode" not in st.session_state:
 if "conversation_id" not in st.session_state:
     default_key = mode_by_name[st.session_state.selected_mode]["key"]
     st.session_state.conversation_id = load_or_create_conversation(default_key)
+if "delete_confirmation" not in st.session_state:
+    st.session_state.delete_confirmation = None
 
 
 with st.sidebar:
@@ -183,6 +185,7 @@ with st.sidebar:
         mode_key = mode_by_name[st.session_state.selected_mode]["key"]
         conversation = api_request("POST", "/api/conversations", json={"mode": mode_key})
         st.session_state.conversation_id = conversation["id"]
+        st.session_state.delete_confirmation = None
         st.rerun()
 
     st.caption("CONVERSATIONS")
@@ -194,9 +197,54 @@ with st.sidebar:
             st.session_state.conversation_id = item["id"]
             stored_mode = next((m["name"] for m in modes if m["key"] == item["mode"]), "General")
             st.session_state.selected_mode = stored_mode
+            st.session_state.delete_confirmation = None
             st.rerun()
         if active:
             st.caption(short_date(item["updated_at"]))
+
+    active_conversation = next(
+        (item for item in conversations if item["id"] == st.session_state.conversation_id),
+        None,
+    )
+    if active_conversation:
+        if st.session_state.delete_confirmation == active_conversation["id"]:
+            st.warning(f"Delete “{active_conversation['title']}”? This cannot be undone.")
+            confirm_column, cancel_column = st.columns(2)
+            if confirm_column.button(
+                "Delete",
+                key="confirm-delete-conversation",
+                type="primary",
+                use_container_width=True,
+            ):
+                api_request("DELETE", f"/api/conversations/{active_conversation['id']}")
+                remaining = api_request("GET", "/api/conversations")
+                if remaining:
+                    replacement = remaining[0]
+                else:
+                    current_mode = mode_by_name[st.session_state.selected_mode]["key"]
+                    replacement = api_request(
+                        "POST", "/api/conversations", json={"mode": current_mode}
+                    )
+                st.session_state.conversation_id = replacement["id"]
+                st.session_state.selected_mode = next(
+                    (m["name"] for m in modes if m["key"] == replacement["mode"]),
+                    "General",
+                )
+                st.session_state.delete_confirmation = None
+                st.rerun()
+            if cancel_column.button(
+                "Cancel", key="cancel-delete-conversation", use_container_width=True
+            ):
+                st.session_state.delete_confirmation = None
+                st.rerun()
+        elif st.button(
+            "Delete current conversation",
+            key="delete-current-conversation",
+            icon=":material/delete:",
+            use_container_width=True,
+        ):
+            st.session_state.delete_confirmation = active_conversation["id"]
+            st.rerun()
 
     st.divider()
     model_status = health["model"]
@@ -302,11 +350,6 @@ if prompt:
 if messages:
     with st.expander("Conversation settings"):
         title = st.text_input("Title", value=conversation["title"], max_chars=120)
-        save_col, delete_col = st.columns(2)
-        if save_col.button("Save title", use_container_width=True):
+        if st.button("Save title", use_container_width=True):
             api_request("PATCH", f"/api/conversations/{conversation['id']}", json={"title": title})
-            st.rerun()
-        if delete_col.button("Delete conversation", use_container_width=True, type="secondary"):
-            api_request("DELETE", f"/api/conversations/{conversation['id']}")
-            st.session_state.conversation_id = load_or_create_conversation(selected["key"])
             st.rerun()

@@ -9,3 +9,5 @@ data/*.db
 data/*.db-*
 data/uploads/*
 !data/uploads/.gitkeep
+evals/results/*
+!evals/results/.gitkeep

@@ -12,6 +12,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Multiple chats, renaming, deletion, and saved image attachments
 - FastAPI backend with interactive API docs
 - Lazy model loading and a mock backend for development
+- Reproducible baseline evaluation and run comparison CLI
 - Localhost-only defaults; no telemetry or hosted model API
 
 ## Requirements
@@ -80,6 +81,26 @@ uv run ruff check .
 
 API documentation is available at <http://127.0.0.1:8000/docs> while the backend runs.
 
+## Evaluation
+
+The bundled synthetic smoke suite verifies the evaluation pipeline and basic cyber concepts:
+
+```bash
+uv run cyberslm-eval validate
+uv run cyberslm-eval run --backend mlx --temperature 0
+```
+
+Reports include the complete responses, deterministic concept scores, category summaries,
+latency, model configuration, environment metadata, and hashes of both the dataset and mode
+prompts. Compare a later candidate against the saved baseline with:
+
+```bash
+uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate.json
+```
+
+Generated reports are private local artifacts and ignored by Git. See
+[`evals/README.md`](evals/README.md) for the schema, limitations, and mock command.
+
 ## Data and privacy
 
 Conversations are stored at `data/cyberslm.db`; uploads are stored in `data/uploads/`.
@@ -105,5 +126,5 @@ Model backend ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
 The model backend is intentionally isolated so later milestones can add streaming, RAG,
-evaluation, fine-tuned adapters, and additional local runtimes without changing persistence
+fine-tuned adapters, and additional local runtimes without changing persistence, evaluation,
 or UI contracts.

@@ -13,3 +13,10 @@ def test_streamlit_theme_is_always_light() -> None:
 def test_ui_css_declares_light_color_scheme() -> None:
     source = (PROJECT_ROOT / "ui" / "app.py").read_text()
     assert "color-scheme: light" in source
+
+
+def test_sidebar_has_confirmed_conversation_deletion() -> None:
+    source = (PROJECT_ROOT / "ui" / "app.py").read_text()
+    assert "Delete current conversation" in source
+    assert "confirm-delete-conversation" in source
+    assert 'api_request("DELETE"' in source
