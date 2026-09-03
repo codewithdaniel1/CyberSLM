@@ -1,10 +1,10 @@
 # CyberSLM
 
 CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.3 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
+Silicon. Version 0.3.1 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
 interface, accepts screenshots, and persists multiple conversations in SQLite.
 
-## What works in v0.3
+## What works in v0.3.1
 
 - Local text and screenshot/image analysis
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
@@ -16,6 +16,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Lazy model loading and a mock backend for development
 - Reproducible baseline evaluation and run comparison CLI
 - Local citation-aware RAG over pinned MITRE ATT&CK and CWE releases
+- Verified source manifests with expected SHA-256 hashes and document counts
 - Localhost-only defaults; no telemetry or hosted model API
 
 ## Requirements
@@ -33,6 +34,7 @@ currently supports.
 ```bash
 ./setup.sh
 uv run cyberslm-knowledge sync
+uv run cyberslm-knowledge verify
 ./start.sh
 ```
 
@@ -91,7 +93,18 @@ API documentation is available at <http://127.0.0.1:8000/docs> while the backend
 ## Cyber knowledge and RAG
 
 CyberSLM stores downloaded ATT&CK/CWE snapshots and its searchable FTS5 index under
-`data/knowledge/`. They are machine-local, ignored by Git, and reproducible with:
+`data/knowledge/`. These generated files are machine-local and ignored by Git; their pinned
+source definitions, expected hashes, expected document counts, parsers, and rebuild commands
+are committed.
+
+Current sources:
+
+| Source | Pinned version | Indexed documents |
+| --- | --- | ---: |
+| MITRE Enterprise ATT&CK | 19.1 | 697 |
+| Common Weakness Enumeration | 4.20 | 944 |
+
+Manage the local index with:
 
 ```bash
 uv run cyberslm-knowledge sync
@@ -99,6 +112,21 @@ uv run cyberslm-knowledge verify
 uv run cyberslm-knowledge status
 uv run cyberslm-knowledge search "T1110 brute force" --mode defensive
 ```
+
+`sync` downloads exactly the versions pinned in
+[`src/cyberslm/knowledge/sources.py`](src/cyberslm/knowledge/sources.py); it does not silently
+select a newer release. Each download must match its committed SHA-256 hash, and parsing must
+produce the expected document count before the existing index is replaced. `verify` checks
+both the downloaded files and the SQLite metadata and exits unsuccessfully on a mismatch.
+
+Chat itself never contacts these sources. If the index is missing, CyberSLM creates an empty
+database and continues with the selected mode prompt and base model. Run `sync` explicitly to
+reconstruct the RAG data.
+
+This is a real local RAG pipeline: it retrieves exact IDs or FTS5 keyword matches, augments the
+Gemma prompt with the selected passages, generates a grounded response, and appends the exact
+consulted references. It is currently lexical RAG—not embedding/vector search—and it does not
+change or fine-tune the Gemma weights.
 
 There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
 provides factual context, evaluation datasets measure behavior, and private conversations are
@@ -124,6 +152,30 @@ uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate
 
 Generated reports are private local artifacts and ignored by Git. See
 [`evals/README.md`](evals/README.md) for the schema, limitations, and mock command.
+
+The current six-case synthetic suite verifies plumbing and basic concept coverage only. It is
+not large enough to establish model quality, production readiness, or superiority over another
+model.
+
+## Roadmap
+
+Work should proceed in this order:
+
+1. **Improve retrieval quality:** add passage-level chunking, local embeddings, hybrid
+   vector/FTS5 search, reranking, and retrieval-specific evaluation.
+2. **Expand evaluation:** build larger licensed datasets for every mode; measure citation
+   correctness, groundedness, refusal behavior, prompt-injection resistance, and regressions.
+3. **Improve the product loop:** stream tokens, support cancellation, expose retrieved sources
+   before generation, and add knowledge-update progress and version notices in the UI.
+4. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+   their licenses, schemas, update cadence, and measurable value over ATT&CK/CWE.
+5. **Consider fine-tuning:** create a separately licensed and reviewed instruction corpus,
+   train a local adapter, and adopt it only if controlled evaluations beat the RAG-only model.
+   Private chats and evaluation answers must never become training data implicitly.
+6. **Prepare releases:** add CI across supported Python versions, migration/backup tests,
+   dependency and artifact integrity checks, packaging, and signed versioned releases.
+
+The immediate next milestone is item 1: hybrid semantic retrieval plus a retrieval benchmark.
 
 ## Authorization context
 
@@ -160,6 +212,6 @@ FastAPI :8000 ─── SQLite conversations
 Model backend ─── retrieved citations ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
-The model backend is intentionally isolated so later milestones can add streaming, RAG,
-fine-tuned adapters, and additional local runtimes without changing persistence, evaluation,
-or UI contracts.
+The model backend is intentionally isolated so later milestones can add streaming, semantic
+retrieval, fine-tuned adapters, and additional local runtimes without changing persistence,
+evaluation, or UI contracts.
