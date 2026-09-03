@@ -95,6 +95,7 @@ CyberSLM stores downloaded ATT&CK/CWE snapshots and its searchable FTS5 index un
 
 ```bash
 uv run cyberslm-knowledge sync
+uv run cyberslm-knowledge verify
 uv run cyberslm-knowledge status
 uv run cyberslm-knowledge search "T1110 brute force" --mode defensive
 ```

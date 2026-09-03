@@ -5,8 +5,11 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
-from cyberslm.knowledge.ingest import parse_attack, parse_cwe
+import pytest
+
+from cyberslm.knowledge.ingest import parse_attack, parse_cwe, verify_payload
 from cyberslm.knowledge.retrieve import expanded_query, retrieve
+from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 
 
@@ -133,3 +136,19 @@ def test_parse_cwe_archive() -> None:
     parsed = list(parse_cwe(archive_bytes.getvalue()))
     assert parsed[0]["external_id"] == "CWE-89"
     assert "parameterized queries" in parsed[0]["content"]
+
+
+def test_source_payload_hash_must_match() -> None:
+    source = KnowledgeSource(
+        key="test",
+        name="Test source",
+        version="1",
+        url="https://example.test/source",
+        filename="source.json",
+        sha256="2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        document_count=1,
+        notice="Test data",
+    )
+    assert verify_payload(source, b"hello") == source.sha256
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        verify_payload(source, b"changed")

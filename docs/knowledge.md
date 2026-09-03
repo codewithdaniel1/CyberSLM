@@ -33,6 +33,7 @@ Inspect the local store:
 
 ```bash
 uv run cyberslm-knowledge status
+uv run cyberslm-knowledge verify
 uv run cyberslm-knowledge search "failed SSH logins brute force" --mode defensive
 uv run cyberslm-knowledge search "CWE-89 SQL injection" --mode secure_code --json
 ```
@@ -54,11 +55,16 @@ Retrieval is non-agentic and read-only:
 No external request occurs during chat. Network access is used only when the user explicitly
 runs the knowledge synchronization command.
 
+Source versions, SHA-256 digests, and expected parsed-document counts are committed with the
+source definitions. Synchronization verifies all three before replacing indexed documents.
+Use `cyberslm-knowledge verify` to check both the downloaded files and index metadata against
+that manifest. A mismatch exits unsuccessfully instead of silently accepting changed data.
+
 ## Source terms and attribution
 
 ATT&CK and CWE permit research, development, and commercial use subject to their terms and
-attribution requirements. Source versions, download URLs, SHA-256 digests, synchronization
-times, document counts, and copyright notices are stored in the local database.
+attribution requirements. Source versions, download URLs, observed SHA-256 digests,
+synchronization times, document counts, and copyright notices are stored in the local database.
 
 - [MITRE ATT&CK data license](https://github.com/mitre-attack/attack-stix-data/blob/master/LICENSE.txt)
 - [CWE terms of use](https://cwe.mitre.org/about/termsofuse.html)

@@ -65,7 +65,7 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert len(cases) == 1
     assert report["dataset"]["sha256"]
     assert report["prompts_sha256"]
-    assert report["application_version"] == "0.3.0"
+    assert report["application_version"] == "0.3.1"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["summary"]["overall"]["pass_rate"] == 1

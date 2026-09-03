@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 from collections.abc import Sequence
 
@@ -20,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--source", action="append", choices=tuple(SOURCES), dest="sources")
 
     subparsers.add_parser("status", help="Show indexed source versions and document counts")
+    subparsers.add_parser("verify", help="Verify local sources and index metadata")
 
     search = subparsers.add_parser("search", help="Search the local knowledge index")
     search.add_argument("query")
@@ -49,11 +52,52 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Knowledge database: {status['path']}")
         print(f"Documents: {status['document_count']}")
         for source in status["sources"]:
+            expected = SOURCES.get(source["source_key"])
+            verified = bool(
+                expected
+                and source["version"] == expected.version
+                and hmac.compare_digest(source["sha256"], expected.sha256)
+                and source["document_count"] == expected.document_count
+            )
             print(
                 f"- {source['name']} {source['version']}: "
-                f"{source['document_count']} documents (synced {source['synced_at']})"
+                f"{source['document_count']} documents "
+                f"({'verified' if verified else 'unverified'}, synced {source['synced_at']})"
             )
         return 0
+
+    if args.command == "verify":
+        indexed = {source["source_key"]: source for source in store.status()["sources"]}
+        source_dir = settings.knowledge_dir / "sources"
+        valid = True
+        for key, expected in SOURCES.items():
+            raw_path = source_dir / expected.filename
+            record = indexed.get(key)
+            raw_digest = ""
+            if raw_path.is_file():
+                digest = hashlib.sha256()
+                with raw_path.open("rb") as source_file:
+                    for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                raw_digest = digest.hexdigest()
+            checks = {
+                "source file": raw_path.is_file()
+                and hmac.compare_digest(raw_digest, expected.sha256),
+                "index metadata": bool(
+                    record
+                    and record["version"] == expected.version
+                    and hmac.compare_digest(record["sha256"], expected.sha256)
+                    and record["document_count"] == expected.document_count
+                ),
+            }
+            source_valid = all(checks.values())
+            valid = valid and source_valid
+            details = ", ".join(
+                f"{name}={'ok' if passed else 'failed'}" for name, passed in checks.items()
+            )
+            label = "OK" if source_valid else "FAIL"
+            print(f"{label} {expected.name} {expected.version}: {details}")
+        return 0 if valid else 1
 
     results = retrieve(
         store,

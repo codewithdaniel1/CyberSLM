@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import html
 import json
 import re
@@ -25,6 +26,16 @@ def clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def verify_payload(source: KnowledgeSource, payload: bytes) -> str:
+    digest = hashlib.sha256(payload).hexdigest()
+    if not hmac.compare_digest(digest, source.sha256):
+        raise RuntimeError(
+            f"SHA-256 mismatch for {source.name} {source.version}: "
+            f"expected {source.sha256}, received {digest}. The local index was not changed."
+        )
+    return digest
+
+
 def download_source(source: KnowledgeSource, destination: Path) -> tuple[bytes, str]:
     with (
         httpx.Client(follow_redirects=True, timeout=120) as client,
@@ -41,9 +52,10 @@ def download_source(source: KnowledgeSource, destination: Path) -> tuple[bytes, 
                 raise RuntimeError(f"Source exceeds {MAX_DOWNLOAD_BYTES} bytes: {source.url}")
             chunks.append(chunk)
     payload = b"".join(chunks)
+    digest = verify_payload(source, payload)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(payload)
-    return payload, hashlib.sha256(payload).hexdigest()
+    return payload, digest
 
 
 def external_reference(value: dict[str, Any], source_name: str) -> dict[str, str] | None:
@@ -145,7 +157,13 @@ PARSERS = {"attack": parse_attack, "cwe": parse_cwe}
 def sync_source(store: KnowledgeStore, source: KnowledgeSource, source_dir: Path) -> int:
     destination = source_dir / source.filename
     payload, digest = download_source(source, destination)
-    documents = PARSERS[source.key](payload)
+    documents = list(PARSERS[source.key](payload))
+    if len(documents) != source.document_count:
+        raise RuntimeError(
+            f"Document-count mismatch for {source.name} {source.version}: "
+            f"expected {source.document_count}, parsed {len(documents)}. "
+            "The local index was not changed."
+        )
     return store.replace_source(
         source_key=source.key,
         source_name=source.name,
