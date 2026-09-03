@@ -10,6 +10,7 @@ from cyberslm.evaluation.compare import compare_reports
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import score_response
+from cyberslm.knowledge import KnowledgeStore
 from cyberslm.model import GenerationRequest, ModelBackend
 
 
@@ -39,12 +40,34 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     dataset_path = tmp_path / "cases.jsonl"
     write_dataset(dataset_path)
     cases = load_dataset(dataset_path)
-    report = EvaluationRunner(ScriptedBackend()).run(cases, dataset_path=dataset_path)
+    knowledge = KnowledgeStore(tmp_path / "knowledge.db")
+    knowledge.replace_source(
+        source_key="attack",
+        source_name="ATT&CK",
+        source_version="19.1",
+        source_url="https://example.test/attack",
+        source_sha256="abc",
+        notice="Test",
+        documents=[
+            {
+                "id": "attack:T1110",
+                "external_id": "T1110",
+                "title": "T1110 — Brute Force",
+                "url": "https://attack.mitre.org/techniques/T1110/",
+                "content": "Failed SSH logins and password guessing",
+            }
+        ],
+    )
+    report = EvaluationRunner(ScriptedBackend(), knowledge_store=knowledge).run(
+        cases, dataset_path=dataset_path
+    )
 
     assert len(cases) == 1
     assert report["dataset"]["sha256"]
     assert report["prompts_sha256"]
-    assert report["application_version"] == "0.2.0"
+    assert report["application_version"] == "0.3.0"
+    assert report["knowledge"]["document_count"] == 1
+    assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["summary"]["overall"]["pass_rate"] == 1
     assert report["cases"][0]["evaluation"]["score"] == 1
 

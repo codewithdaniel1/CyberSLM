@@ -294,9 +294,18 @@ with st.sidebar:
     model_status = health["model"]
     backend_label = model_status.get("model_id", model_status["backend"])
     load_label = "ready" if model_status["loaded"] else "loads on first prompt"
+    knowledge_status = health.get("knowledge", {})
+    knowledge_count = knowledge_status.get("document_count", 0)
+    if health.get("rag_enabled") and knowledge_count:
+        knowledge_label = f"RAG ready · {knowledge_count:,} references"
+    elif health.get("rag_enabled"):
+        knowledge_label = "RAG empty · run knowledge sync"
+    else:
+        knowledge_label = "RAG disabled"
     st.markdown(
         f'<div class="cyber-subtitle"><span class="status-dot"></span>{backend_label}<br>'
-        f'<span style="padding-left: 1.05rem">{load_label} · private/local</span></div>',
+        f'<span style="padding-left: 1.05rem">{load_label} · private/local</span><br>'
+        f'<span style="padding-left: 1.05rem">{knowledge_label}</span></div>',
         unsafe_allow_html=True,
     )
 

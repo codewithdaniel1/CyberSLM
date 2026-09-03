@@ -7,12 +7,32 @@ from PIL import Image
 
 import cyberslm.api as api_module
 from cyberslm.database import Database
+from cyberslm.knowledge import KnowledgeStore
 from cyberslm.model import MockBackend
 
 
 def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(api_module, "db", Database(tmp_path / "api.db"))
     monkeypatch.setattr(api_module, "model_backend", MockBackend())
+    knowledge = KnowledgeStore(tmp_path / "knowledge.db")
+    knowledge.replace_source(
+        source_key="attack",
+        source_name="MITRE ATT&CK",
+        source_version="19.1",
+        source_url="https://example.test/attack",
+        source_sha256="abc",
+        notice="Test",
+        documents=[
+            {
+                "id": "attack:T1110",
+                "external_id": "T1110",
+                "title": "T1110 — Brute Force",
+                "url": "https://attack.mitre.org/techniques/T1110/",
+                "content": "Failed SSH logins can indicate password guessing and brute force.",
+            }
+        ],
+    )
+    monkeypatch.setattr(api_module, "knowledge_store", knowledge)
     client = TestClient(api_module.app)
 
     created = client.post(
@@ -32,11 +52,16 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert "Mock Defensive response" in response.json()["assistant"]["content"]
+    assert "Local references consulted" in response.json()["assistant"]["content"]
+    assert response.json()["knowledge"][0]["id"] == "attack:T1110"
 
     loaded = client.get(f"/api/conversations/{conversation_id}").json()
     assert loaded["title"] == "Triage these failed SSH logins"
     assert loaded["authorization_context"] == "defensive_operations"
     assert len(loaded["messages"]) == 2
+
+    health = client.get("/api/health").json()
+    assert health["knowledge"]["document_count"] == 1
 
 
 def test_rejects_unknown_mode(tmp_path: Path, monkeypatch) -> None:

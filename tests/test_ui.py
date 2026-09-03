@@ -27,3 +27,9 @@ def test_ui_records_authorization_context() -> None:
     assert "Environment / authorization context" in source
     assert "/api/authorization-contexts" in source
     assert "does not verify permission or override safety boundaries" in source
+
+
+def test_ui_displays_local_knowledge_status() -> None:
+    source = (PROJECT_ROOT / "ui" / "app.py").read_text()
+    assert "RAG ready" in source
+    assert "RAG empty" in source

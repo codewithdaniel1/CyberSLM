@@ -6,6 +6,7 @@ import sqlite3
 import sys
 
 from cyberslm.config import settings
+from cyberslm.knowledge import KnowledgeStore
 
 
 def mark(ok: bool) -> str:
@@ -14,6 +15,7 @@ def mark(ok: bool) -> str:
 
 def main() -> int:
     settings.ensure_directories()
+    knowledge = KnowledgeStore(settings.knowledge_database_path).status()
     checks = {
         "Python 3.11-3.13": (3, 11) <= sys.version_info[:2] < (3, 14),
         "Apple Silicon": platform.system() == "Darwin" and platform.machine() == "arm64",
@@ -27,6 +29,10 @@ def main() -> int:
     print("CyberSLM doctor")
     print(f"Model: {settings.model_id}")
     print(f"Backend: {settings.model_backend}")
+    print(
+        f"Knowledge: {knowledge['document_count']} documents "
+        f"({'ready' if knowledge['ready'] else 'not synced'})"
+    )
     for name, ok in checks.items():
         print(f"[{mark(ok):7}] {name}")
 

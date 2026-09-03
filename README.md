@@ -1,10 +1,10 @@
 # CyberSLM
 
 CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.2 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
+Silicon. Version 0.3 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
 interface, accepts screenshots, and persists multiple conversations in SQLite.
 
-## What works in v0.2
+## What works in v0.3
 
 - Local text and screenshot/image analysis
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
@@ -15,6 +15,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - FastAPI backend with interactive API docs
 - Lazy model loading and a mock backend for development
 - Reproducible baseline evaluation and run comparison CLI
+- Local citation-aware RAG over pinned MITRE ATT&CK and CWE releases
 - Localhost-only defaults; no telemetry or hosted model API
 
 ## Requirements
@@ -31,6 +32,7 @@ currently supports.
 
 ```bash
 ./setup.sh
+uv run cyberslm-knowledge sync
 ./start.sh
 ```
 
@@ -65,6 +67,9 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MAX_UPLOAD_MB` | `10` | Per-image upload limit |
 | `CYBERSLM_API_PORT` | `8000` | Local API port |
 | `CYBERSLM_UI_PORT` | `8501` | Local UI port |
+| `CYBERSLM_RAG_ENABLED` | `true` | Enable local knowledge retrieval |
+| `CYBERSLM_RAG_RESULTS` | `4` | Maximum references retrieved per prompt |
+| `CYBERSLM_RAG_MAX_CHARS` | `16000` | Maximum retrieved context characters |
 
 Run the environment check at any time:
 
@@ -82,6 +87,22 @@ uv run ruff check .
 ```
 
 API documentation is available at <http://127.0.0.1:8000/docs> while the backend runs.
+
+## Cyber knowledge and RAG
+
+CyberSLM stores downloaded ATT&CK/CWE snapshots and its searchable FTS5 index under
+`data/knowledge/`. They are machine-local, ignored by Git, and reproducible with:
+
+```bash
+uv run cyberslm-knowledge sync
+uv run cyberslm-knowledge status
+uv run cyberslm-knowledge search "T1110 brute force" --mode defensive
+```
+
+There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
+provides factual context, evaluation datasets measure behavior, and private conversations are
+not training data. See [`docs/knowledge.md`](docs/knowledge.md) for the complete data map,
+retrieval behavior, and source attribution.
 
 ## Evaluation
 
@@ -133,8 +154,9 @@ Streamlit UI ──── screenshots
     ▼
 FastAPI :8000 ─── SQLite conversations
     │
+    ├── Local ATT&CK/CWE retrieval ─── SQLite FTS5
     ▼
-Model backend ─── MLX-VLM ─── Gemma 3 4B (4-bit)
+Model backend ─── retrieved citations ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
 The model backend is intentionally isolated so later milestones can add streaming, RAG,

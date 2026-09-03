@@ -16,6 +16,8 @@ from typing import Any
 from cyberslm import __version__
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import score_response
+from cyberslm.knowledge import KnowledgeStore
+from cyberslm.knowledge.retrieve import retrieve
 from cyberslm.model import GenerationRequest, ModelBackend
 from cyberslm.modes import get_mode
 
@@ -67,8 +69,17 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class EvaluationRunner:
-    def __init__(self, backend: ModelBackend):
+    def __init__(
+        self,
+        backend: ModelBackend,
+        knowledge_store: KnowledgeStore | None = None,
+        rag_results: int = 4,
+        rag_max_chars: int = 16_000,
+    ):
         self.backend = backend
+        self.knowledge_store = knowledge_store
+        self.rag_results = rag_results
+        self.rag_max_chars = rag_max_chars
 
     def run(
         self,
@@ -82,11 +93,23 @@ class EvaluationRunner:
         for index, case in enumerate(cases, start=1):
             if progress:
                 progress(index, len(cases), case)
+            knowledge_documents = (
+                retrieve(
+                    self.knowledge_store,
+                    case.prompt,
+                    case.mode,
+                    limit=self.rag_results,
+                    max_chars=self.rag_max_chars,
+                )
+                if self.knowledge_store
+                else []
+            )
             request = GenerationRequest(
                 mode=get_mode(case.mode),
                 messages=[{"role": "user", "content": case.prompt, "attachments": []}],
                 image_paths=list(case.image_paths),
                 authorization_context=case.authorization_context,
+                knowledge_documents=knowledge_documents,
             )
             started = time.perf_counter()
             response = self.backend.generate(request)
@@ -99,6 +122,16 @@ class EvaluationRunner:
                     "authorization_context": case.authorization_context,
                     "prompt": case.prompt,
                     "response": response,
+                    "knowledge": [
+                        {
+                            "id": document["id"],
+                            "title": document["title"],
+                            "url": document["url"],
+                            "source_key": document["source_key"],
+                            "source_version": document["source_version"],
+                        }
+                        for document in knowledge_documents
+                    ],
                     "latency_seconds": round(latency, 4),
                     "evaluation": score_response(case, response),
                     "metadata": case.metadata,
@@ -126,6 +159,7 @@ class EvaluationRunner:
             "configuration": configuration or {},
             "prompts_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
             "model": self.backend.status,
+            "knowledge": self.knowledge_store.status() if self.knowledge_store else None,
             "environment": {
                 "python": platform.python_version(),
                 "platform": platform.platform(),

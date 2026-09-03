@@ -12,11 +12,14 @@ from pydantic import BaseModel, Field
 
 from cyberslm.config import settings
 from cyberslm.database import Database
+from cyberslm.knowledge import KnowledgeStore
+from cyberslm.knowledge.retrieve import retrieve
 from cyberslm.model import GenerationRequest, create_backend
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
 settings.ensure_directories()
 db = Database(settings.database_path)
+knowledge_store = KnowledgeStore(settings.knowledge_database_path)
 model_backend = create_backend(settings)
 
 
@@ -30,7 +33,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="CyberSLM API",
     description="Local-first multimodal cybersecurity assistant",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -101,7 +104,12 @@ async def save_image(upload: UploadFile) -> dict[str, str]:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model": model_backend.status}
+    return {
+        "status": "ok",
+        "model": model_backend.status,
+        "knowledge": knowledge_store.status(),
+        "rag_enabled": settings.rag_enabled,
+    }
 
 
 @app.get("/api/modes")
@@ -127,6 +135,16 @@ def list_authorization_contexts() -> list[dict]:
         }
         for context in AUTHORIZATION_CONTEXTS.values()
     ]
+
+
+@app.get("/api/knowledge/status")
+def knowledge_status() -> dict:
+    return {**knowledge_store.status(), "enabled": settings.rag_enabled}
+
+
+@app.get("/api/knowledge/search")
+def search_knowledge(q: str, limit: int = 4) -> list[dict]:
+    return knowledge_store.search(q, min(max(limit, 1), 10), settings.rag_max_chars)
 
 
 @app.get("/api/conversations")
@@ -233,11 +251,24 @@ async def send_message(
             [],
         )
     image_paths = [Path(item["path"]) for item in active_attachments]
+    knowledge_documents = []
+    if settings.rag_enabled:
+        knowledge_documents = retrieve(
+            knowledge_store,
+            content,
+            selected_mode,
+            limit=settings.rag_results,
+            max_chars=settings.rag_max_chars,
+        )
     try:
         response_text = await run_in_threadpool(
             model_backend.generate,
             GenerationRequest(
-                get_mode(selected_mode), history, image_paths, selected_authorization
+                get_mode(selected_mode),
+                history,
+                image_paths,
+                selected_authorization,
+                knowledge_documents,
             ),
         )
     except RuntimeError as exc:
@@ -254,4 +285,18 @@ async def send_message(
     if not existing:
         updates["title"] = clean_title(content)
     db.update_conversation(conversation_id, **updates)
-    return {"user": user_message, "assistant": assistant_message, "model": model_backend.status}
+    return {
+        "user": user_message,
+        "assistant": assistant_message,
+        "model": model_backend.status,
+        "knowledge": [
+            {
+                "id": document["id"],
+                "title": document["title"],
+                "url": document["url"],
+                "source_key": document["source_key"],
+                "source_version": document["source_version"],
+            }
+            for document in knowledge_documents
+        ],
+    }

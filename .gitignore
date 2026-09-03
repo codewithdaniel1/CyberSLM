@@ -9,5 +9,7 @@ data/*.db
 data/*.db-*
 data/uploads/*
 !data/uploads/.gitkeep
+data/knowledge/*
+!data/knowledge/.gitkeep
 evals/results/*
 !evals/results/.gitkeep

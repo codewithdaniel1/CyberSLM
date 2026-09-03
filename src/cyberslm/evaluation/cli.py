@@ -10,6 +10,7 @@ from pathlib import Path
 from cyberslm.config import settings
 from cyberslm.evaluation.compare import compare_reports, comparison_markdown, load_report
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
+from cyberslm.knowledge import KnowledgeStore
 from cyberslm.model import create_backend
 
 DEFAULT_DATASET = Path("evals/datasets/smoke.jsonl")
@@ -29,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--model", default=settings.model_id)
     run.add_argument("--max-tokens", type=int, default=settings.max_tokens)
     run.add_argument("--temperature", type=float, default=0.0)
+    run.add_argument("--no-rag", action="store_true", help="Evaluate without local retrieval")
+    run.add_argument("--rag-results", type=int, default=settings.rag_results)
 
     compare = subparsers.add_parser("compare", help="Compare two saved evaluation reports")
     compare.add_argument("baseline", type=Path)
@@ -63,7 +66,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         temperature=args.temperature,
     )
     backend = create_backend(run_settings)
-    report = EvaluationRunner(backend).run(
+    knowledge_store = None
+    if not args.no_rag:
+        candidate_store = KnowledgeStore(settings.knowledge_database_path)
+        if candidate_store.status()["ready"]:
+            knowledge_store = candidate_store
+        else:
+            print("Knowledge index is empty; continuing without RAG.")
+    report = EvaluationRunner(
+        backend,
+        knowledge_store=knowledge_store,
+        rag_results=args.rag_results,
+        rag_max_chars=settings.rag_max_chars,
+    ).run(
         cases,
         dataset_path=args.dataset,
         configuration={
@@ -71,6 +86,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "model_id": args.model,
             "max_tokens": args.max_tokens,
             "temperature": args.temperature,
+            "rag_enabled": knowledge_store is not None,
+            "rag_results": args.rag_results,
         },
         progress=lambda index, total, case: print(
             f"[{index}/{total}] {case.id} ({case.mode})", flush=True

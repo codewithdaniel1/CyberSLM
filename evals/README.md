@@ -43,6 +43,9 @@ Run the local Gemma baseline deterministically:
 uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
+When the local knowledge index is populated, evaluations include RAG by default and record
+the source versions and hashes in the report. Use `--no-rag` for a model-only control run.
+
 Exercise the harness without loading a model:
 
 ```bash
