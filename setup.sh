@@ -22,6 +22,7 @@ mkdir -p data/uploads
 echo
 echo "Setup complete. Start CyberSLM with:"
 echo "  uv run cyberslm-knowledge sync"
+echo "  uv run cyberslm-knowledge verify"
 echo "  ./start.sh"
 echo
 echo "The 4-bit Gemma model downloads lazily on the first prompt."

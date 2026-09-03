@@ -18,6 +18,7 @@ class EvalCase:
     mode: str
     prompt: str
     expected_concepts: tuple[tuple[str, ...], ...]
+    expected_references: tuple[str, ...] | None = None
     prohibited_terms: tuple[str, ...] = ()
     minimum_score: float = 0.67
     image_paths: tuple[Path, ...] = ()
@@ -64,6 +65,14 @@ class EvalCase:
             isinstance(item, str) for item in prohibited
         ):
             raise DatasetError(f"prohibited_terms must be a list of strings in {value['id']!r}")
+        raw_references = value.get("expected_references")
+        if raw_references is not None and (
+            not isinstance(raw_references, list)
+            or not all(isinstance(item, str) and item.strip() for item in raw_references)
+        ):
+            raise DatasetError(
+                f"expected_references must be a list of non-empty strings in {value['id']!r}"
+            )
         authorization_context = value.get("authorization_context", "unspecified")
         if authorization_context not in AUTHORIZATION_CONTEXTS:
             raise DatasetError(
@@ -76,6 +85,11 @@ class EvalCase:
             mode=str(value["mode"]),
             prompt=str(value["prompt"]),
             expected_concepts=tuple(concepts),
+            expected_references=(
+                tuple(item.strip().upper() for item in raw_references)
+                if raw_references is not None
+                else None
+            ),
             prohibited_terms=tuple(prohibited),
             minimum_score=minimum_score,
             image_paths=image_paths,

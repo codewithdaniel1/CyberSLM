@@ -40,7 +40,7 @@ def download_source(source: KnowledgeSource, destination: Path) -> tuple[bytes, 
     with (
         httpx.Client(follow_redirects=True, timeout=120) as client,
         client.stream(
-            "GET", source.url, headers={"User-Agent": "CyberSLM/0.3 knowledge-sync"}
+            "GET", source.url, headers={"User-Agent": "CyberSLM/0.4 knowledge-sync"}
         ) as response,
     ):
         response.raise_for_status()
@@ -151,7 +151,60 @@ def parse_cwe(payload: bytes) -> Iterable[dict[str, Any]]:
         }
 
 
-PARSERS = {"attack": parse_attack, "cwe": parse_cwe}
+def parse_capec(payload: bytes) -> Iterable[dict[str, Any]]:
+    with zipfile.ZipFile(BytesIO(payload)) as archive:
+        xml_names = [name for name in archive.namelist() if name.lower().endswith(".xml")]
+        if len(xml_names) != 1:
+            raise RuntimeError("Expected one XML document in the CAPEC archive")
+        root = ElementTree.fromstring(archive.read(xml_names[0]))
+
+    namespace_match = re.match(r"\{(.+)}", root.tag)
+    namespace = {"capec": namespace_match.group(1)} if namespace_match else {}
+    prefix = "capec:" if namespace else ""
+    for pattern in root.findall(f".//{prefix}Attack_Pattern", namespace):
+        identifier = pattern.get("ID")
+        name = pattern.get("Name")
+        status = pattern.get("Status", "")
+        if not identifier or not name or status.lower() == "deprecated":
+            continue
+        description = element_text(pattern.find(f"{prefix}Description", namespace))
+        execution = element_text(pattern.find(f"{prefix}Execution_Flow", namespace))
+        prerequisites = element_text(pattern.find(f"{prefix}Prerequisites", namespace))
+        mitigations = element_text(pattern.find(f"{prefix}Mitigations", namespace))
+        weaknesses = [
+            f"CWE-{item.get('CWE_ID')}"
+            for item in pattern.findall(f".//{prefix}Related_Weakness", namespace)
+            if item.get("CWE_ID")
+        ]
+        external_id = f"CAPEC-{identifier}"
+        content = "\n".join(
+            part
+            for part in (
+                f"CAPEC ID: {external_id}",
+                f"Attack pattern: {name}",
+                f"Description: {description}",
+                f"Prerequisites: {prerequisites}" if prerequisites else "",
+                f"Execution flow: {execution}" if execution else "",
+                f"Mitigations: {mitigations}" if mitigations else "",
+                f"Related weaknesses: {', '.join(weaknesses)}" if weaknesses else "",
+            )
+            if part
+        )
+        yield {
+            "id": f"capec:{external_id}",
+            "external_id": external_id,
+            "title": f"{external_id} — {name}",
+            "url": f"https://capec.mitre.org/data/definitions/{identifier}.html",
+            "content": content,
+            "metadata": {
+                "abstraction": pattern.get("Abstraction"),
+                "status": status,
+                "related_weaknesses": weaknesses,
+            },
+        }
+
+
+PARSERS = {"attack": parse_attack, "cwe": parse_cwe, "capec": parse_capec}
 
 
 def sync_source(store: KnowledgeStore, source: KnowledgeSource, source_dir: Path) -> int:

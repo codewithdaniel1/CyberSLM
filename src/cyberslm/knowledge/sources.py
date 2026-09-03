@@ -45,4 +45,17 @@ SOURCES: dict[str, KnowledgeSource] = {
             "under the CWE Terms of Use."
         ),
     ),
+    "capec": KnowledgeSource(
+        key="capec",
+        name="Common Attack Pattern Enumeration and Classification",
+        version="3.9",
+        url="https://capec.mitre.org/data/archive/capec_v3.9.zip",
+        filename="capec_v3.9.zip",
+        sha256="c56527f3d64b7164fcdae73c1a7545ee6e83b1150546c07a93339b1543a3041d",
+        document_count=559,
+        notice=(
+            "© 2007-2026 The MITRE Corporation. CAPEC is reproduced and distributed "
+            "under the CAPEC Terms of Use."
+        ),
+    ),
 }

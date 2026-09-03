@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from cyberslm.config import settings
 from cyberslm.database import Database
 from cyberslm.knowledge import KnowledgeStore
+from cyberslm.knowledge.embeddings import LocalEmbedder
 from cyberslm.knowledge.retrieve import retrieve
 from cyberslm.model import GenerationRequest, create_backend
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
@@ -20,6 +21,11 @@ from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 settings.ensure_directories()
 db = Database(settings.database_path)
 knowledge_store = KnowledgeStore(settings.knowledge_database_path)
+knowledge_embedder = (
+    LocalEmbedder(settings.rag_embedding_model, settings.embedding_cache_dir)
+    if settings.rag_semantic_enabled
+    else None
+)
 model_backend = create_backend(settings)
 
 
@@ -33,7 +39,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="CyberSLM API",
     description="Local-first multimodal cybersecurity assistant",
-    version="0.3.1",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -109,6 +115,7 @@ def health() -> dict:
         "model": model_backend.status,
         "knowledge": knowledge_store.status(),
         "rag_enabled": settings.rag_enabled,
+        "rag_semantic_enabled": settings.rag_semantic_enabled,
     }
 
 
@@ -143,8 +150,17 @@ def knowledge_status() -> dict:
 
 
 @app.get("/api/knowledge/search")
-def search_knowledge(q: str, limit: int = 4) -> list[dict]:
-    return knowledge_store.search(q, min(max(limit, 1), 10), settings.rag_max_chars)
+def search_knowledge(q: str, limit: int = 4, mode: str = "general") -> list[dict]:
+    if mode not in MODES:
+        raise HTTPException(status_code=422, detail="Unknown cyber mode")
+    return retrieve(
+        knowledge_store,
+        q,
+        mode,
+        limit=min(max(limit, 1), 10),
+        max_chars=settings.rag_max_chars,
+        embedder=knowledge_embedder,
+    )
 
 
 @app.get("/api/conversations")
@@ -259,6 +275,7 @@ async def send_message(
             selected_mode,
             limit=settings.rag_results,
             max_chars=settings.rag_max_chars,
+            embedder=knowledge_embedder,
         )
     try:
         response_text = await run_in_threadpool(
@@ -296,6 +313,7 @@ async def send_message(
                 "url": document["url"],
                 "source_key": document["source_key"],
                 "source_version": document["source_version"],
+                "retrieval_method": document["retrieval_method"],
             }
             for document in knowledge_documents
         ],

@@ -15,7 +15,7 @@ from typing import Any
 
 from cyberslm import __version__
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
-from cyberslm.evaluation.scoring import score_response
+from cyberslm.evaluation.scoring import score_citations, score_response, score_retrieval
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.retrieve import retrieve
 from cyberslm.model import GenerationRequest, ModelBackend
@@ -62,9 +62,31 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     categories: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for result in results:
         categories[result["category"]].append(result)
+    retrieval = [item["retrieval_evaluation"] for item in results]
+    retrieval = [item for item in retrieval if item is not None]
+    citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
+        "retrieval": {
+            "cases": len(retrieval),
+            "passed": sum(item["passed"] for item in retrieval),
+            "pass_rate": round(sum(item["passed"] for item in retrieval) / len(retrieval), 4),
+            "mean_recall": round(fmean(item["recall"] for item in retrieval), 4),
+            "mean_precision": round(fmean(item["precision"] for item in retrieval), 4),
+        }
+        if retrieval
+        else None,
+        "citations": {
+            "cases": len(citations),
+            "complete": sum(item["complete"] for item in citations),
+            "complete_rate": round(
+                sum(item["complete"] for item in citations) / len(citations), 4
+            ),
+            "mean_coverage": round(fmean(item["coverage"] for item in citations), 4),
+        }
+        if citations
+        else None,
     }
 
 
@@ -75,11 +97,13 @@ class EvaluationRunner:
         knowledge_store: KnowledgeStore | None = None,
         rag_results: int = 4,
         rag_max_chars: int = 16_000,
+        embedder: Any | None = None,
     ):
         self.backend = backend
         self.knowledge_store = knowledge_store
         self.rag_results = rag_results
         self.rag_max_chars = rag_max_chars
+        self.embedder = embedder
 
     def run(
         self,
@@ -100,6 +124,7 @@ class EvaluationRunner:
                     case.mode,
                     limit=self.rag_results,
                     max_chars=self.rag_max_chars,
+                    embedder=self.embedder,
                 )
                 if self.knowledge_store
                 else []
@@ -134,6 +159,8 @@ class EvaluationRunner:
                     ],
                     "latency_seconds": round(latency, 4),
                     "evaluation": score_response(case, response),
+                    "retrieval_evaluation": score_retrieval(case, knowledge_documents),
+                    "citation_evaluation": score_citations(response, knowledge_documents),
                     "metadata": case.metadata,
                 }
             )

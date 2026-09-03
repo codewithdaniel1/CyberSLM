@@ -296,8 +296,18 @@ with st.sidebar:
     load_label = "ready" if model_status["loaded"] else "loads on first prompt"
     knowledge_status = health.get("knowledge", {})
     knowledge_count = knowledge_status.get("document_count", 0)
+    passage_count = knowledge_status.get("chunk_count", 0)
+    embedding_count = max(
+        (item.get("count", 0) for item in knowledge_status.get("embedding_models", [])),
+        default=0,
+    )
     if health.get("rag_enabled") and knowledge_count:
-        knowledge_label = f"RAG ready · {knowledge_count:,} references"
+        if health.get("rag_semantic_enabled") and embedding_count >= passage_count > 0:
+            knowledge_label = f"Hybrid RAG ready · {embedding_count:,} passages"
+        elif health.get("rag_semantic_enabled") and embedding_count:
+            knowledge_label = f"Semantic indexing · {embedding_count:,}/{passage_count:,}"
+        else:
+            knowledge_label = f"Lexical RAG ready · {knowledge_count:,} references"
     elif health.get("rag_enabled"):
         knowledge_label = "RAG empty · run knowledge sync"
     else:
@@ -308,6 +318,17 @@ with st.sidebar:
         f'<span style="padding-left: 1.05rem">{knowledge_label}</span></div>',
         unsafe_allow_html=True,
     )
+    if knowledge_count:
+        with st.expander("Knowledge details"):
+            for source in knowledge_status.get("sources", []):
+                st.markdown(
+                    f"**{source['name']} {source['version']}**  \n"
+                    f"{source['document_count']:,} indexed documents"
+                )
+            st.code(
+                "uv run cyberslm-knowledge sync\nuv run cyberslm-knowledge verify",
+                language="bash",
+            )
 
 
 conversation = api_request("GET", f"/api/conversations/{st.session_state.conversation_id}")
@@ -401,6 +422,25 @@ if prompt:
         for upload in uploads:
             st.image(upload.getvalue(), caption=upload.name, width=480)
         st.markdown(prompt)
+
+    selected_sources = []
+    if health.get("rag_enabled"):
+        try:
+            selected_sources = api_request(
+                "GET",
+                "/api/knowledge/search",
+                params={"q": prompt, "mode": selected["key"], "limit": 4},
+            )
+        except RuntimeError:
+            selected_sources = []
+    if selected_sources:
+        with st.expander(f"{len(selected_sources)} local source(s) selected", expanded=True):
+            for source in selected_sources:
+                st.markdown(
+                    f"[{source['title']}]({source['url']})  \n"
+                    f"{source['source_key']} {source['source_version']} · "
+                    f"{source['retrieval_method']}"
+                )
 
     with (
         st.chat_message("assistant", avatar="assistant"),

@@ -1,10 +1,10 @@
 # CyberSLM
 
 CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.3.1 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
+Silicon. Version 0.4 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
 interface, accepts screenshots, and persists multiple conversations in SQLite.
 
-## What works in v0.3.1
+## What works in v0.4
 
 - Local text and screenshot/image analysis
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
@@ -15,8 +15,12 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - FastAPI backend with interactive API docs
 - Lazy model loading and a mock backend for development
 - Reproducible baseline evaluation and run comparison CLI
-- Local citation-aware RAG over pinned MITRE ATT&CK and CWE releases
+- Local hybrid citation-aware RAG over pinned MITRE ATT&CK, CWE, and CAPEC releases
+- Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
+- Resumable semantic indexing with visible progress and pre-generation source previews
+- Retrieval/citation evaluation metrics and a dedicated 20-case retrieval benchmark
 - Verified source manifests with expected SHA-256 hashes and document counts
+- GitHub Actions CI across Python 3.11-3.13 plus wheel/source-package validation
 - Localhost-only defaults; no telemetry or hosted model API
 
 ## Requirements
@@ -70,8 +74,11 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_API_PORT` | `8000` | Local API port |
 | `CYBERSLM_UI_PORT` | `8501` | Local UI port |
 | `CYBERSLM_RAG_ENABLED` | `true` | Enable local knowledge retrieval |
+| `CYBERSLM_RAG_SEMANTIC_ENABLED` | `true` | Combine embeddings with FTS5 retrieval |
+| `CYBERSLM_RAG_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Local FastEmbed model |
 | `CYBERSLM_RAG_RESULTS` | `4` | Maximum references retrieved per prompt |
 | `CYBERSLM_RAG_MAX_CHARS` | `16000` | Maximum retrieved context characters |
+| `ORT_DISABLE_TELEMETRY` | `1` | Keep the ONNX embedding runtime telemetry-disabled |
 
 Run the environment check at any time:
 
@@ -92,7 +99,7 @@ API documentation is available at <http://127.0.0.1:8000/docs> while the backend
 
 ## Cyber knowledge and RAG
 
-CyberSLM stores downloaded ATT&CK/CWE snapshots and its searchable FTS5 index under
+CyberSLM stores downloaded ATT&CK/CWE/CAPEC snapshots and its searchable index under
 `data/knowledge/`. These generated files are machine-local and ignored by Git; their pinned
 source definitions, expected hashes, expected document counts, parsers, and rebuild commands
 are committed.
@@ -103,11 +110,13 @@ Current sources:
 | --- | --- | ---: |
 | MITRE Enterprise ATT&CK | 19.1 | 697 |
 | Common Weakness Enumeration | 4.20 | 944 |
+| Common Attack Pattern Enumeration and Classification | 3.9 | 559 |
 
 Manage the local index with:
 
 ```bash
 uv run cyberslm-knowledge sync
+uv run cyberslm-knowledge embed
 uv run cyberslm-knowledge verify
 uv run cyberslm-knowledge status
 uv run cyberslm-knowledge search "T1110 brute force" --mode defensive
@@ -123,10 +132,11 @@ Chat itself never contacts these sources. If the index is missing, CyberSLM crea
 database and continues with the selected mode prompt and base model. Run `sync` explicitly to
 reconstruct the RAG data.
 
-This is a real local RAG pipeline: it retrieves exact IDs or FTS5 keyword matches, augments the
-Gemma prompt with the selected passages, generates a grounded response, and appends the exact
-consulted references. It is currently lexical RAG—not embedding/vector search—and it does not
-change or fine-tune the Gemma weights.
+This is a real local hybrid RAG pipeline: it prioritizes exact IDs, combines FTS5 keyword
+results with local BGE embeddings through reciprocal-rank fusion, augments the Gemma prompt
+with the selected passages, generates a grounded response, and appends the exact consulted
+references. It does not change or fine-tune the Gemma weights. If semantic vectors are missing
+or incomplete, retrieval safely falls back to FTS5 until `embed` finishes the resumable build.
 
 There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
 provides factual context, evaluation datasets measure behavior, and private conversations are
@@ -139,6 +149,8 @@ The bundled synthetic smoke suite verifies the evaluation pipeline and basic cyb
 
 ```bash
 uv run cyberslm-eval validate
+uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
+uv run cyberslm-eval retrieve
 uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
@@ -157,25 +169,34 @@ The current six-case synthetic suite verifies plumbing and basic concept coverag
 not large enough to establish model quality, production readiness, or superiority over another
 model.
 
+The separate 20-case synthetic retrieval benchmark currently measures 75% recall for
+lexical-only search and 80% for hybrid search at four results. These numbers validate the
+retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
+
 ## Roadmap
 
 Work should proceed in this order:
 
-1. **Improve retrieval quality:** add passage-level chunking, local embeddings, hybrid
-   vector/FTS5 search, reranking, and retrieval-specific evaluation.
-2. **Expand evaluation:** build larger licensed datasets for every mode; measure citation
+Completed in v0.4: passage chunking, local embeddings, hybrid vector/FTS5 retrieval,
+reciprocal-rank reranking, retrieval metrics, resumable indexing, source previews, CAPEC, CI,
+and package builds.
+
+Remaining work should proceed in this order:
+
+1. **Expand evaluation:** build larger licensed datasets for every mode; measure citation
    correctness, groundedness, refusal behavior, prompt-injection resistance, and regressions.
-3. **Improve the product loop:** stream tokens, support cancellation, expose retrieved sources
-   before generation, and add knowledge-update progress and version notices in the UI.
-4. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
-   their licenses, schemas, update cadence, and measurable value over ATT&CK/CWE.
-5. **Consider fine-tuning:** create a separately licensed and reviewed instruction corpus,
+2. **Improve the product loop:** stream tokens, support cancellation, and add in-app knowledge
+   synchronization controls; source previews and index/version status are now available.
+3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+   their licenses, schemas, update cadence, and measurable value over current sources.
+4. **Consider fine-tuning:** create a separately licensed and reviewed instruction corpus,
    train a local adapter, and adopt it only if controlled evaluations beat the RAG-only model.
    Private chats and evaluation answers must never become training data implicitly.
-6. **Prepare releases:** add CI across supported Python versions, migration/backup tests,
-   dependency and artifact integrity checks, packaging, and signed versioned releases.
+5. **Prepare releases:** CI and package builds are present; add migration/backup tests,
+   artifact attestations, publishing automation, and signed versioned releases.
 
-The immediate next milestone is item 1: hybrid semantic retrieval plus a retrieval benchmark.
+The immediate next milestone is item 1 plus streaming: broaden quality/safety evaluation while
+improving response latency and control in the UI.
 
 ## Authorization context
 
@@ -207,11 +228,11 @@ Streamlit UI ──── screenshots
     ▼
 FastAPI :8000 ─── SQLite conversations
     │
-    ├── Local ATT&CK/CWE retrieval ─── SQLite FTS5
+    ├── ATT&CK/CWE/CAPEC ─── chunks ─── FTS5 + local embeddings
     ▼
 Model backend ─── retrieved citations ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
-The model backend is intentionally isolated so later milestones can add streaming, semantic
-retrieval, fine-tuned adapters, and additional local runtimes without changing persistence,
-evaluation, or UI contracts.
+The model backend is intentionally isolated so later milestones can add streaming,
+fine-tuned adapters, and additional local runtimes without changing persistence, evaluation,
+or UI contracts.

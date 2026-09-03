@@ -17,6 +17,7 @@ Each JSONL object contains:
 - `mode`: one of CyberSLM's supported modes
 - `prompt`: exact model input
 - `expected_concepts`: groups of acceptable terms; one match per group earns credit
+- `expected_references`: optional ATT&CK, CWE, or CAPEC identifiers for retrieval scoring
 - `minimum_score`: passing fraction, between 0 and 1
 - `prohibited_terms`: optional terms that force a failure when present
 - `images`: optional paths relative to the dataset file
@@ -35,7 +36,20 @@ Validate the dataset:
 
 ```bash
 uv run cyberslm-eval validate
+uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
 ```
+
+Benchmark retrieval without loading Gemma:
+
+```bash
+uv run cyberslm-eval retrieve
+uv run cyberslm-eval retrieve --lexical-only
+```
+
+Retrieval reports record recall, precision, exact-reference coverage, latency, retrieval method,
+embedding configuration, knowledge versions, and a report integrity hash. Generation reports
+also record expected-reference retrieval and citation coverage when the dataset provides
+`expected_references`.
 
 Run the local Gemma baseline deterministically:
 

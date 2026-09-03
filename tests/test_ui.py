@@ -31,5 +31,8 @@ def test_ui_records_authorization_context() -> None:
 
 def test_ui_displays_local_knowledge_status() -> None:
     source = (PROJECT_ROOT / "ui" / "app.py").read_text()
-    assert "RAG ready" in source
+    assert "Hybrid RAG ready" in source
+    assert "Lexical RAG ready" in source
     assert "RAG empty" in source
+    assert "local source(s) selected" in source
+    assert "retrieval_method" in source

@@ -1,16 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from io import BytesIO
 from pathlib import Path
 
 import pytest
 
-from cyberslm.knowledge.ingest import parse_attack, parse_cwe, verify_payload
+from cyberslm.knowledge.chunking import chunk_text
+from cyberslm.knowledge.embeddings import DEFAULT_EMBEDDING_MODEL
+from cyberslm.knowledge.ingest import parse_attack, parse_capec, parse_cwe, verify_payload
 from cyberslm.knowledge.retrieve import expanded_query, retrieve
 from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
+
+
+class FakeEmbedder:
+    model_name = "test-embedding"
+
+    def embed_query(self, query: str) -> list[float]:
+        del query
+        return [0.0, 1.0]
+
+
+def test_embedding_runtime_disables_telemetry() -> None:
+    assert DEFAULT_EMBEDDING_MODEL
+    assert os.environ["ORT_DISABLE_TELEMETRY"] == "1"
 
 
 def document(identifier: str, title: str, content: str) -> dict:
@@ -152,3 +168,61 @@ def test_source_payload_hash_must_match() -> None:
     assert verify_payload(source, b"hello") == source.sha256
     with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
         verify_payload(source, b"changed")
+
+
+def test_parse_capec_archive() -> None:
+    xml = b"""<?xml version="1.0"?>
+    <Attack_Pattern_Catalog xmlns="http://capec.mitre.org/capec-3">
+      <Attack_Patterns>
+        <Attack_Pattern ID="66" Name="SQL Injection" Abstraction="Standard" Status="Stable">
+          <Description>Manipulate an SQL query through untrusted input.</Description>
+          <Mitigations><Mitigation>Use parameterized queries.</Mitigation></Mitigations>
+          <Related_Weaknesses><Related_Weakness CWE_ID="89"/></Related_Weaknesses>
+        </Attack_Pattern>
+      </Attack_Patterns>
+    </Attack_Pattern_Catalog>"""
+    archive_bytes = BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr("capec.xml", xml)
+
+    parsed = list(parse_capec(archive_bytes.getvalue()))
+    assert parsed[0]["external_id"] == "CAPEC-66"
+    assert parsed[0]["metadata"]["related_weaknesses"] == ["CWE-89"]
+
+
+def test_chunking_is_bounded_and_overlapping() -> None:
+    chunks = chunk_text("alpha " * 300, max_chars=240, overlap_chars=30)
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 240 for chunk in chunks)
+    assert chunks[0][-20:] in chunks[1]
+
+
+def test_hybrid_retrieval_uses_semantic_vectors(tmp_path: Path) -> None:
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    replace(
+        store,
+        "attack",
+        [
+            document("attack:T1110", "T1110 Brute Force", "Password guessing"),
+            document("attack:T1566", "T1566 Phishing", "Malicious email delivery"),
+        ],
+    )
+    chunks = store.list_chunks()
+    vectors = {
+        "attack:T1110": [1.0, 0.0],
+        "attack:T1566": [0.0, 1.0],
+    }
+    store.upsert_embeddings(
+        FakeEmbedder.model_name,
+        ((chunk["chunk_id"], vectors[chunk["document_id"]]) for chunk in chunks),
+    )
+
+    results = retrieve(
+        store,
+        "deceptive message delivery",
+        "defensive",
+        limit=1,
+        embedder=FakeEmbedder(),
+    )
+    assert results[0]["external_id"] == "T1566"
+    assert "semantic" in results[0]["retrieval_method"]

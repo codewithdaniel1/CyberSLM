@@ -39,6 +39,7 @@ class Settings:
     database_path: Path = PROJECT_ROOT / "data" / "cyberslm.db"
     knowledge_dir: Path = PROJECT_ROOT / "data" / "knowledge"
     knowledge_database_path: Path = PROJECT_ROOT / "data" / "knowledge" / "knowledge.db"
+    embedding_cache_dir: Path = PROJECT_ROOT / "data" / "knowledge" / "models"
     model_backend: str = os.getenv("CYBERSLM_MODEL_BACKEND", "mlx").lower()
     model_id: str = os.getenv("CYBERSLM_MODEL_ID", "mlx-community/gemma-3-4b-it-4bit")
     max_tokens: int = _int_env("CYBERSLM_MAX_TOKENS", 768)
@@ -49,6 +50,10 @@ class Settings:
     ui_port: int = _int_env("CYBERSLM_UI_PORT", 8501)
     max_upload_mb: int = _int_env("CYBERSLM_MAX_UPLOAD_MB", 10)
     rag_enabled: bool = _bool_env("CYBERSLM_RAG_ENABLED", True)
+    rag_semantic_enabled: bool = _bool_env("CYBERSLM_RAG_SEMANTIC_ENABLED", True)
+    rag_embedding_model: str = os.getenv(
+        "CYBERSLM_RAG_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"
+    )
     rag_results: int = _int_env("CYBERSLM_RAG_RESULTS", 4)
     rag_max_chars: int = _int_env("CYBERSLM_RAG_MAX_CHARS", 16_000)
 

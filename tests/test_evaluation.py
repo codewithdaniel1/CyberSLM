@@ -9,7 +9,7 @@ import pytest
 from cyberslm.evaluation.compare import compare_reports
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
-from cyberslm.evaluation.scoring import score_response
+from cyberslm.evaluation.scoring import score_citations, score_response, score_retrieval
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.model import GenerationRequest, ModelBackend
 
@@ -17,7 +17,7 @@ from cyberslm.model import GenerationRequest, ModelBackend
 class ScriptedBackend(ModelBackend):
     def generate(self, request: GenerationRequest) -> str:
         del request
-        return "This is brute force activity mapped to T1110. Check for a successful login."
+        return "This is brute force activity mapped to T1110 [1]. Check for a successful login."
 
     @property
     def status(self) -> dict[str, Any]:
@@ -31,6 +31,7 @@ def write_dataset(path: Path) -> None:
         "mode": "defensive",
         "prompt": "Triage failed SSH logins",
         "expected_concepts": [["brute force", "guessing"], ["T1110"], ["successful login"]],
+        "expected_references": ["T1110"],
         "minimum_score": 1,
     }
     path.write_text(json.dumps(case) + "\n")
@@ -65,11 +66,13 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert len(cases) == 1
     assert report["dataset"]["sha256"]
     assert report["prompts_sha256"]
-    assert report["application_version"] == "0.3.1"
+    assert report["application_version"] == "0.4.0"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["summary"]["overall"]["pass_rate"] == 1
     assert report["cases"][0]["evaluation"]["score"] == 1
+    assert report["summary"]["retrieval"]["mean_recall"] == 1
+    assert report["summary"]["citations"]["complete_rate"] == 1
 
 
 def test_scoring_alternatives_and_prohibited_terms() -> None:
@@ -89,6 +92,22 @@ def test_scoring_alternatives_and_prohibited_terms() -> None:
     assert clean["score"] == 1
     assert unsafe["passed"] is False
     assert unsafe["prohibited_hits"] == ["steal credentials"]
+
+
+def test_retrieval_and_citation_scoring() -> None:
+    case = EvalCase(
+        id="retrieval",
+        category="soc",
+        mode="defensive",
+        prompt="Investigate authentication failures",
+        expected_concepts=(("authentication",),),
+        expected_references=("T1110",),
+    )
+    documents = [{"external_id": "T1110"}]
+
+    assert score_retrieval(case, documents)["passed"] is True
+    assert score_citations("Supported by [1].", documents)["complete"] is True
+    assert score_citations("Unsupported [2].", documents)["invalid_citations"] == [2]
 
 
 def test_dataset_rejects_duplicate_ids(tmp_path: Path) -> None:

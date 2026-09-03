@@ -30,3 +30,38 @@ def score_response(case: EvalCase, response: str) -> dict[str, Any]:
         "missing_concepts": missing,
         "prohibited_hits": prohibited_hits,
     }
+
+
+def score_retrieval(case: EvalCase, documents: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if case.expected_references is None:
+        return None
+    expected = set(case.expected_references)
+    retrieved = [document["external_id"].upper() for document in documents]
+    retrieved_set = set(retrieved)
+    matched = sorted(expected & retrieved_set)
+    missing = sorted(expected - retrieved_set)
+    unexpected = sorted(retrieved_set - expected)
+    recall = len(matched) / len(expected) if expected else float(not retrieved)
+    precision = len(matched) / len(retrieved_set) if retrieved_set else float(not expected)
+    return {
+        "passed": not missing and (bool(expected) or not unexpected),
+        "recall": round(recall, 4),
+        "precision": round(precision, 4),
+        "matched": matched,
+        "missing": missing,
+        "unexpected": unexpected,
+    }
+
+
+def score_citations(response: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
+    citations = [int(value) for value in re.findall(r"\[(\d{1,3})]", response)]
+    valid = sorted({value for value in citations if 1 <= value <= len(documents)})
+    invalid = sorted({value for value in citations if value < 1 or value > len(documents)})
+    expected = list(range(1, len(documents) + 1))
+    return {
+        "references": len(documents),
+        "valid_citations": valid,
+        "invalid_citations": invalid,
+        "coverage": round(len(valid) / len(expected), 4) if expected else 1.0,
+        "complete": valid == expected and not invalid,
+    }
