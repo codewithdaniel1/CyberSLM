@@ -157,6 +157,7 @@ def load_or_create_conversation(mode: str) -> str:
 try:
     health = api_request("GET", "/api/health")
     modes = api_request("GET", "/api/modes")
+    authorization_contexts = api_request("GET", "/api/authorization-contexts")
 except RuntimeError as error:
     st.error(str(error), icon="⚠️")
     st.code("./start.sh", language="bash")
@@ -164,12 +165,26 @@ except RuntimeError as error:
 
 mode_by_name = {item["name"]: item for item in modes}
 mode_names = list(mode_by_name)
+authorization_by_name = {item["name"]: item for item in authorization_contexts}
+authorization_names = list(authorization_by_name)
 
 if "selected_mode" not in st.session_state:
     st.session_state.selected_mode = "General"
 if "conversation_id" not in st.session_state:
     default_key = mode_by_name[st.session_state.selected_mode]["key"]
     st.session_state.conversation_id = load_or_create_conversation(default_key)
+if "selected_authorization" not in st.session_state:
+    initial_conversation = api_request(
+        "GET", f"/api/conversations/{st.session_state.conversation_id}"
+    )
+    st.session_state.selected_authorization = next(
+        (
+            item["name"]
+            for item in authorization_contexts
+            if item["key"] == initial_conversation.get("authorization_context", "unspecified")
+        ),
+        "Not specified",
+    )
 if "delete_confirmation" not in st.session_state:
     st.session_state.delete_confirmation = None
 
@@ -183,7 +198,12 @@ with st.sidebar:
 
     if st.button("＋ New conversation", use_container_width=True, type="primary"):
         mode_key = mode_by_name[st.session_state.selected_mode]["key"]
-        conversation = api_request("POST", "/api/conversations", json={"mode": mode_key})
+        authorization_key = authorization_by_name[st.session_state.selected_authorization]["key"]
+        conversation = api_request(
+            "POST",
+            "/api/conversations",
+            json={"mode": mode_key, "authorization_context": authorization_key},
+        )
         st.session_state.conversation_id = conversation["id"]
         st.session_state.delete_confirmation = None
         st.rerun()
@@ -197,6 +217,14 @@ with st.sidebar:
             st.session_state.conversation_id = item["id"]
             stored_mode = next((m["name"] for m in modes if m["key"] == item["mode"]), "General")
             st.session_state.selected_mode = stored_mode
+            st.session_state.selected_authorization = next(
+                (
+                    context["name"]
+                    for context in authorization_contexts
+                    if context["key"] == item.get("authorization_context", "unspecified")
+                ),
+                "Not specified",
+            )
             st.session_state.delete_confirmation = None
             st.rerun()
         if active:
@@ -222,13 +250,29 @@ with st.sidebar:
                     replacement = remaining[0]
                 else:
                     current_mode = mode_by_name[st.session_state.selected_mode]["key"]
+                    current_authorization = authorization_by_name[
+                        st.session_state.selected_authorization
+                    ]["key"]
                     replacement = api_request(
-                        "POST", "/api/conversations", json={"mode": current_mode}
+                        "POST",
+                        "/api/conversations",
+                        json={
+                            "mode": current_mode,
+                            "authorization_context": current_authorization,
+                        },
                     )
                 st.session_state.conversation_id = replacement["id"]
                 st.session_state.selected_mode = next(
                     (m["name"] for m in modes if m["key"] == replacement["mode"]),
                     "General",
+                )
+                st.session_state.selected_authorization = next(
+                    (
+                        context["name"]
+                        for context in authorization_contexts
+                        if context["key"] == replacement.get("authorization_context", "unspecified")
+                    ),
+                    "Not specified",
                 )
                 st.session_state.delete_confirmation = None
                 st.rerun()
@@ -275,11 +319,28 @@ with header_right:
     )
 
 selected = mode_by_name[selected_mode]
+authorization_name = st.selectbox(
+    "Environment / authorization context",
+    authorization_names,
+    key="selected_authorization",
+    help=(
+        "Saved with this conversation as user-provided context. "
+        "It does not verify permission or override safety boundaries."
+    ),
+)
+authorization = authorization_by_name[authorization_name]
+st.caption(authorization["description"])
+
+conversation_updates = {}
 if selected["key"] != conversation["mode"]:
+    conversation_updates["mode"] = selected["key"]
+if authorization["key"] != conversation.get("authorization_context", "unspecified"):
+    conversation_updates["authorization_context"] = authorization["key"]
+if conversation_updates:
     conversation = api_request(
         "PATCH",
         f"/api/conversations/{conversation['id']}",
-        json={"mode": selected["key"]},
+        json=conversation_updates,
     )
     conversation["messages"] = api_request("GET", f"/api/conversations/{conversation['id']}")[
         "messages"
@@ -290,6 +351,10 @@ st.markdown(
     f" &nbsp;·&nbsp; {selected['description']}</div>",
     unsafe_allow_html=True,
 )
+if selected["key"] in {"offensive", "ctf"} and authorization["key"] == "unspecified":
+    st.warning(
+        "Set the environment context before requesting operational offensive or CTF guidance."
+    )
 
 messages = conversation.get("messages", [])
 if not messages:
@@ -337,7 +402,11 @@ if prompt:
             result = api_request(
                 "POST",
                 f"/api/conversations/{conversation['id']}/messages",
-                data={"content": prompt, "mode": selected["key"]},
+                data={
+                    "content": prompt,
+                    "mode": selected["key"],
+                    "authorization_context": authorization["key"],
+                },
                 files=files,
             )
             st.markdown(result["assistant"]["content"])

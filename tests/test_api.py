@@ -15,19 +15,27 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(api_module, "model_backend", MockBackend())
     client = TestClient(api_module.app)
 
-    created = client.post("/api/conversations", json={"mode": "defensive"})
+    created = client.post(
+        "/api/conversations",
+        json={"mode": "defensive", "authorization_context": "defensive_operations"},
+    )
     assert created.status_code == 201
     conversation_id = created.json()["id"]
 
     response = client.post(
         f"/api/conversations/{conversation_id}/messages",
-        data={"content": "Triage these failed SSH logins", "mode": "defensive"},
+        data={
+            "content": "Triage these failed SSH logins",
+            "mode": "defensive",
+            "authorization_context": "defensive_operations",
+        },
     )
     assert response.status_code == 200
     assert "Mock Defensive response" in response.json()["assistant"]["content"]
 
     loaded = client.get(f"/api/conversations/{conversation_id}").json()
     assert loaded["title"] == "Triage these failed SSH logins"
+    assert loaded["authorization_context"] == "defensive_operations"
     assert len(loaded["messages"]) == 2
 
 
@@ -36,6 +44,16 @@ def test_rejects_unknown_mode(tmp_path: Path, monkeypatch) -> None:
     client = TestClient(api_module.app)
     response = client.post("/api/conversations", json={"mode": "invalid"})
     assert response.status_code == 422
+
+    contexts = client.get("/api/authorization-contexts")
+    assert contexts.status_code == 200
+    assert any(item["key"] == "owned_lab" for item in contexts.json())
+
+    invalid_context = client.post(
+        "/api/conversations",
+        json={"mode": "general", "authorization_context": "self-declared-root"},
+    )
+    assert invalid_context.status_code == 422
 
 
 def test_image_upload_is_saved_and_deleted(tmp_path: Path, monkeypatch) -> None:

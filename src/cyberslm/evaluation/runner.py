@@ -17,7 +17,7 @@ from cyberslm import __version__
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import score_response
 from cyberslm.model import GenerationRequest, ModelBackend
-from cyberslm.modes import MODES, get_mode
+from cyberslm.modes import get_mode
 
 
 def load_dataset(path: Path) -> list[EvalCase]:
@@ -86,6 +86,7 @@ class EvaluationRunner:
                 mode=get_mode(case.mode),
                 messages=[{"role": "user", "content": case.prompt, "attachments": []}],
                 image_paths=list(case.image_paths),
+                authorization_context=case.authorization_context,
             )
             started = time.perf_counter()
             response = self.backend.generate(request)
@@ -95,6 +96,7 @@ class EvaluationRunner:
                     "id": case.id,
                     "category": case.category,
                     "mode": case.mode,
+                    "authorization_context": case.authorization_context,
                     "prompt": case.prompt,
                     "response": response,
                     "latency_seconds": round(latency, 4),
@@ -105,7 +107,11 @@ class EvaluationRunner:
 
         dataset_bytes = dataset_path.read_bytes()
         prompt_bytes = json.dumps(
-            {key: mode.system_prompt for key, mode in MODES.items()}, sort_keys=True
+            {
+                case.id: get_mode(case.mode).build_system_prompt(case.authorization_context)
+                for case in cases
+            },
+            sort_keys=True,
         ).encode()
         return {
             "schema_version": 1,

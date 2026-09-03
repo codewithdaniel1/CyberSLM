@@ -1,13 +1,22 @@
 from pathlib import Path
 
 from cyberslm.model import GenerationRequest, MockBackend
-from cyberslm.modes import MODES, get_mode
+from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
 
 def test_all_modes_have_distinct_prompts() -> None:
     prompts = {mode.system_prompt for mode in MODES.values()}
     assert len(prompts) == len(MODES)
     assert get_mode("not-real") == MODES["general"]
+    assert "Default response structure" in MODES["defensive"].system_prompt
+    assert "MITRE ATT&CK" in MODES["defensive"].system_prompt
+
+
+def test_authorization_context_is_labeled_unverified() -> None:
+    prompt = MODES["offensive"].build_system_prompt("authorized_assessment")
+    assert "not independently verified" in prompt
+    assert AUTHORIZATION_CONTEXTS["authorized_assessment"].name in prompt
+    assert "never overrides" in prompt
 
 
 def test_mock_backend_reports_prompt_and_images(tmp_path: Path) -> None:

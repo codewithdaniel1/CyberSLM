@@ -1,13 +1,15 @@
 # CyberSLM
 
 CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.1 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
+Silicon. Version 0.2 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
 interface, accepts screenshots, and persists multiple conversations in SQLite.
 
-## What works in v0.1
+## What works in v0.2
 
 - Local text and screenshot/image analysis
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
+- Mode-specific response structures for consistent analyst output
+- Per-conversation authorization context, explicitly labeled as user-provided and unverified
 - Persistent SQLite conversations with automatic titles
 - Multiple chats, renaming, deletion, and saved image attachments
 - FastAPI backend with interactive API docs
@@ -100,6 +102,16 @@ uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate
 
 Generated reports are private local artifacts and ignored by Git. See
 [`evals/README.md`](evals/README.md) for the schema, limitations, and mock command.
+
+## Authorization context
+
+Each conversation can be labeled as not specified, an owned system/local lab, CTF/training,
+an authorized assessment, or defensive operations. CyberSLM includes that selection in the
+model prompt and stores it in SQLite with the conversation.
+
+This field records context; it does not verify authorization and never overrides the base
+safety boundaries. Existing databases are migrated automatically and existing conversations
+default to `Not specified`.
 
 ## Data and privacy
 

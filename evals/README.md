@@ -20,6 +20,7 @@ Each JSONL object contains:
 - `minimum_score`: passing fraction, between 0 and 1
 - `prohibited_terms`: optional terms that force a failure when present
 - `images`: optional paths relative to the dataset file
+- `authorization_context`: optional user-provided environment context; defaults to `unspecified`
 - `metadata`: optional provenance or notes
 
 Expected concepts are transparent, deterministic plumbing checks. They do not measure

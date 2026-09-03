@@ -15,6 +15,7 @@ class GenerationRequest:
     mode: Mode
     messages: list[dict[str, Any]]
     image_paths: list[Path]
+    authorization_context: str = "unspecified"
 
 
 class ModelBackend(ABC):
@@ -84,7 +85,10 @@ class MLXGemmaBackend(ModelBackend):
     def _build_prompt(request: GenerationRequest) -> str:
         # Keeping history inside one user turn works consistently across mlx-vlm releases and
         # allows the helper to insert the exact Gemma multimodal tokens around current images.
-        transcript: list[str] = [request.mode.system_prompt, "\nConversation:"]
+        transcript: list[str] = [
+            request.mode.build_system_prompt(request.authorization_context),
+            "\nConversation:",
+        ]
         for message in request.messages:
             speaker = "Analyst" if message["role"] == "user" else "CyberSLM"
             attachment_note = ""

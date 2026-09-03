@@ -44,7 +44,7 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert len(cases) == 1
     assert report["dataset"]["sha256"]
     assert report["prompts_sha256"]
-    assert report["application_version"] == "0.1.0"
+    assert report["application_version"] == "0.2.0"
     assert report["summary"]["overall"]["pass_rate"] == 1
     assert report["cases"][0]["evaluation"]["score"] == 1
 
@@ -81,12 +81,16 @@ def test_compare_reports() -> None:
     baseline = {
         "schema_version": 1,
         "run_id": "before",
+        "dataset": {"sha256": "dataset"},
+        "prompts_sha256": "prompt-before",
         "summary": {"overall": {"mean_score": 0.5, "pass_rate": 0.0}},
         "cases": [{"id": "one", "evaluation": {"score": 0.5, "passed": False}}],
     }
     candidate = {
         "schema_version": 1,
         "run_id": "after",
+        "dataset": {"sha256": "dataset"},
+        "prompts_sha256": "prompt-after",
         "summary": {"overall": {"mean_score": 1.0, "pass_rate": 1.0}},
         "cases": [{"id": "one", "evaluation": {"score": 1.0, "passed": True}}],
     }
@@ -95,3 +99,5 @@ def test_compare_reports() -> None:
     assert comparison["score_delta"] == 0.5
     assert comparison["pass_rate_delta"] == 1
     assert comparison["cases"][0]["candidate_passed"] is True
+    assert comparison["compatibility"]["dataset_match"] is True
+    assert comparison["compatibility"]["prompts_match"] is False

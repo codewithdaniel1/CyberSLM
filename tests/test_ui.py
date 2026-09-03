@@ -20,3 +20,10 @@ def test_sidebar_has_confirmed_conversation_deletion() -> None:
     assert "Delete current conversation" in source
     assert "confirm-delete-conversation" in source
     assert 'api_request("DELETE"' in source
+
+
+def test_ui_records_authorization_context() -> None:
+    source = (PROJECT_ROOT / "ui" / "app.py").read_text()
+    assert "Environment / authorization context" in source
+    assert "/api/authorization-contexts" in source
+    assert "does not verify permission or override safety boundaries" in source

@@ -35,6 +35,7 @@ class Database:
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
                     mode TEXT NOT NULL DEFAULT 'general',
+                    authorization_context TEXT NOT NULL DEFAULT 'unspecified',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -55,6 +56,15 @@ class Database:
                     ON conversations(updated_at DESC);
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(conversations)").fetchall()
+            }
+            if "authorization_context" not in columns:
+                connection.execute(
+                    """ALTER TABLE conversations
+                       ADD COLUMN authorization_context TEXT NOT NULL DEFAULT 'unspecified'"""
+                )
 
     @staticmethod
     def _conversation(row: sqlite3.Row) -> dict[str, Any]:
@@ -81,21 +91,36 @@ class Database:
         return self._conversation(row) if row else None
 
     def create_conversation(
-        self, mode: str = "general", title: str = "New conversation"
+        self,
+        mode: str = "general",
+        title: str = "New conversation",
+        authorization_context: str = "unspecified",
     ) -> dict[str, Any]:
         conversation_id = str(uuid.uuid4())
         timestamp = utc_now()
         with self._lock, self._connect() as connection:
             connection.execute(
                 """INSERT INTO conversations
-                   (id, title, mode, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (conversation_id, title, mode, timestamp, timestamp),
+                   (id, title, mode, authorization_context, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    conversation_id,
+                    title,
+                    mode,
+                    authorization_context,
+                    timestamp,
+                    timestamp,
+                ),
             )
         return self.get_conversation(conversation_id)  # type: ignore[return-value]
 
     def update_conversation(
-        self, conversation_id: str, *, title: str | None = None, mode: str | None = None
+        self,
+        conversation_id: str,
+        *,
+        title: str | None = None,
+        mode: str | None = None,
+        authorization_context: str | None = None,
     ) -> dict[str, Any] | None:
         fields: list[str] = []
         values: list[str] = []
@@ -105,6 +130,9 @@ class Database:
         if mode is not None:
             fields.append("mode = ?")
             values.append(mode)
+        if authorization_context is not None:
+            fields.append("authorization_context = ?")
+            values.append(authorization_context)
         if not fields:
             return self.get_conversation(conversation_id)
         fields.append("updated_at = ?")

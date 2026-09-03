@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from cyberslm.modes import MODES
+from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES
 
 
 class DatasetError(ValueError):
@@ -21,6 +21,7 @@ class EvalCase:
     prohibited_terms: tuple[str, ...] = ()
     minimum_score: float = 0.67
     image_paths: tuple[Path, ...] = ()
+    authorization_context: str = "unspecified"
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -63,6 +64,11 @@ class EvalCase:
             isinstance(item, str) for item in prohibited
         ):
             raise DatasetError(f"prohibited_terms must be a list of strings in {value['id']!r}")
+        authorization_context = value.get("authorization_context", "unspecified")
+        if authorization_context not in AUTHORIZATION_CONTEXTS:
+            raise DatasetError(
+                f"Unknown authorization context {authorization_context!r} in {value['id']!r}"
+            )
 
         return cls(
             id=str(value["id"]),
@@ -73,5 +79,6 @@ class EvalCase:
             prohibited_terms=tuple(prohibited),
             minimum_score=minimum_score,
             image_paths=image_paths,
+            authorization_context=authorization_context,
             metadata=dict(value.get("metadata", {})),
         )
