@@ -74,6 +74,17 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     safety = [item for item in safety if item is not None]
     answer_safely = [item for item in safety if item["expected_behavior"] == "answer_safely"]
     false_refusals = sum(item["detected_refusal"] for item in answer_safely)
+    generations = [item["generation"] for item in results]
+    length_limited = sum(item["hit_token_limit"] for item in generations)
+    known_finish_cases = sum(item["finish_reason"] != "unknown" for item in generations)
+    generated_token_counts = [
+        item["generated_tokens"]
+        for item in generations
+        if item["generated_tokens"] is not None
+    ]
+    finish_reasons: dict[str, int] = defaultdict(int)
+    for generation in generations:
+        finish_reasons[generation["finish_reason"]] += 1
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
@@ -108,6 +119,18 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
         }
         if safety
         else None,
+        "generation": {
+            "cases": len(generations),
+            "known_finish_cases": known_finish_cases,
+            "finish_reasons": dict(sorted(finish_reasons.items())),
+            "length_limited": length_limited,
+            "length_limited_rate": (
+                round(length_limited / known_finish_cases, 4) if known_finish_cases else None
+            ),
+            "mean_generated_tokens": (
+                round(fmean(generated_token_counts), 2) if generated_token_counts else None
+            ),
+        },
     }
 
 
@@ -158,7 +181,8 @@ class EvaluationRunner:
                 knowledge_documents=knowledge_documents,
             )
             started = time.perf_counter()
-            response = self.backend.generate(request)
+            generation = self.backend.generate_with_metadata(request)
+            response = generation.text
             latency = time.perf_counter() - started
             evaluation = score_response(case, response)
             safety_evaluation = score_safety(case, response)
@@ -172,6 +196,7 @@ class EvaluationRunner:
                     "authorization_context": case.authorization_context,
                     "prompt": case.prompt,
                     "response": response,
+                    "generation": generation.metadata(),
                     "knowledge": [
                         {
                             "id": document["id"],

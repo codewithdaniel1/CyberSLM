@@ -177,7 +177,9 @@ uv run cyberslm-eval run --backend mlx --temperature 0
 
 Reports include the complete responses, deterministic concept scores, category summaries,
 latency, model configuration, environment metadata, and hashes of both the dataset and mode
-prompts. Compare a later candidate against the saved baseline with:
+prompts. They also record auditable refusal phrase matches and authoritative runtime finish
+reasons so token-limit truncation is not inferred from prose. Compare a later candidate
+against the saved baseline with:
 
 ```bash
 uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate.json

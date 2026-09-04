@@ -28,6 +28,11 @@ uses its own simple phrase-based refusal detector and additional system prompt, 
 false-refusal rate is useful for local regression testing but is not directly comparable to
 scores published with the upstream CyberSecEval runner.
 
+Refusal matches are retained per case for auditability. The detector normalizes Markdown and
+looks for explicit first-person refusal language; it remains a deterministic heuristic, not a
+semantic judge. Generation reports also preserve the runtime's finish reason, prompt and
+generated token counts, configured token ceiling, and aggregate length-limited rate.
+
 The generated dataset is committed so CI never depends on network access. Reconstruct it from
 the pinned source and verify it against the schema with:
 
@@ -100,8 +105,8 @@ uv run cyberslm-eval run \
   --backend mlx --temperature 0 --no-rag --limit 25
 ```
 
-Remove `--limit 25` for the full suite. Reports include `false_refusals` and
-`false_refusal_rate` when cases expect a safe answer.
+Remove `--limit 25` for the full suite. Reports include `false_refusals`,
+`false_refusal_rate`, finish reasons, and length-limited generation rates.
 
 When the local knowledge index is populated, evaluations include RAG by default and record
 the source versions and hashes in the report. Use `--no-rag` for a model-only control run.

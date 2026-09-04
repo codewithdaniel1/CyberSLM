@@ -35,6 +35,13 @@ def test_mock_backend_reports_prompt_and_images(tmp_path: Path) -> None:
     assert "Build a timeline" in response
     assert "1 image(s)" in response
     assert backend.status["loaded"] is True
+    assert backend.generate_with_metadata(
+        GenerationRequest(
+            mode=MODES["general"],
+            messages=[{"role": "user", "content": "Hello"}],
+            image_paths=[],
+        )
+    ).finish_reason == "stop"
 
 
 def test_mock_backend_streams_and_honors_cancellation() -> None:

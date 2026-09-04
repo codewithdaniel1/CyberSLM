@@ -20,6 +20,24 @@ class GenerationRequest:
     knowledge_documents: list[dict[str, Any]] | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class GenerationOutput:
+    text: str
+    finish_reason: str = "unknown"
+    prompt_tokens: int | None = None
+    generated_tokens: int | None = None
+    max_tokens: int | None = None
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "finish_reason": self.finish_reason,
+            "hit_token_limit": self.finish_reason == "length",
+            "prompt_tokens": self.prompt_tokens,
+            "generated_tokens": self.generated_tokens,
+            "max_tokens": self.max_tokens,
+        }
+
+
 class GenerationCancelled(RuntimeError):
     """Raised when a caller cancels generation between streamed tokens."""
 
@@ -40,6 +58,9 @@ class ModelBackend(ABC):
     @abstractmethod
     def generate(self, request: GenerationRequest) -> str:
         raise NotImplementedError
+
+    def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
+        return GenerationOutput(text=self.generate(request))
 
     def stream(
         self,
@@ -74,6 +95,9 @@ class MockBackend(ModelBackend):
             "to generate a real local response with Gemma."
         )
         return response + source_footer(request.knowledge_documents)
+
+    def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
+        return GenerationOutput(text=self.generate(request), finish_reason="stop")
 
     def stream(
         self,
@@ -158,12 +182,31 @@ class MLXGemmaBackend(ModelBackend):
         return "\n\n".join(transcript)
 
     def generate(self, request: GenerationRequest) -> str:
-        return "".join(self.stream(request))
+        return self.generate_with_metadata(request).text
+
+    def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
+        metadata: dict[str, Any] = {}
+        text = "".join(self._stream(request, completed=metadata.update))
+        return GenerationOutput(
+            text=text,
+            finish_reason=metadata.get("finish_reason", "unknown"),
+            prompt_tokens=metadata.get("prompt_tokens"),
+            generated_tokens=metadata.get("generated_tokens"),
+            max_tokens=self.settings.max_tokens,
+        )
 
     def stream(
         self,
         request: GenerationRequest,
         cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        yield from self._stream(request, cancelled=cancelled)
+
+    def _stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+        completed: Callable[[dict[str, Any]], None] | None = None,
     ) -> Iterator[str]:
         with self._lock:
             self._load()
@@ -180,6 +223,7 @@ class MLXGemmaBackend(ModelBackend):
                     add_generation_prompt=True,
                 )
                 emitted = False
+                last_result: Any = None
                 for result in stream_generate(
                     self._model,
                     self._processor,
@@ -189,12 +233,22 @@ class MLXGemmaBackend(ModelBackend):
                     temperature=self.settings.temperature,
                     verbose=False,
                 ):
+                    last_result = result
                     if cancelled and cancelled():
                         raise GenerationCancelled
                     text = result.text if hasattr(result, "text") else str(result)
                     if text:
                         emitted = True
                         yield text
+                if completed is not None and last_result is not None:
+                    completed(
+                        {
+                            "finish_reason": getattr(last_result, "finish_reason", None)
+                            or "unknown",
+                            "prompt_tokens": getattr(last_result, "prompt_tokens", None),
+                            "generated_tokens": getattr(last_result, "generation_tokens", None),
+                        }
+                    )
                 if not emitted:
                     yield "The model returned an empty response."
                 footer = source_footer(request.knowledge_documents)
