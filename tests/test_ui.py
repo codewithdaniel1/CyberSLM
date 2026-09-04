@@ -39,6 +39,9 @@ def test_ui_displays_local_knowledge_status() -> None:
     assert "Sync verified knowledge" in source
     assert 'options=["Auto", "On", "Off"]' in source
     assert '"rag_policy": (rag_policy or "Auto").lower()' in source
+    assert "Check generated C syntax" in source
+    assert '"validate_code": str(bool(validate_code)).lower()' in source
+    assert "it never links or executes generated programs" in source
 
 
 def test_ui_uses_cancellable_streaming_generation() -> None:

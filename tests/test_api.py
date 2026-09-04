@@ -141,6 +141,25 @@ def test_chat_api_validates_and_honors_rag_policy(tmp_path: Path, monkeypatch) -
     assert disabled.json()["rag"]["reason"] == "disabled_for_message"
 
 
+def test_chat_api_can_request_non_executing_code_validation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "db", Database(tmp_path / "api.db"))
+    monkeypatch.setattr(api_module, "model_backend", MockBackend())
+    monkeypatch.setattr(api_module, "knowledge_store", KnowledgeStore(tmp_path / "knowledge.db"))
+    client = TestClient(api_module.app)
+    conversation = client.post("/api/conversations", json={"mode": "secure_code"}).json()
+
+    response = client.post(
+        f"/api/conversations/{conversation['id']}/messages",
+        data={"content": "Write C", "validate_code": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["code_validation"]["requested"] is True
+    assert response.json()["code_validation"]["status"] == "no_c_blocks"
+    assert "generated code was not executed" in response.json()["assistant"]["content"]
+    assert "syntax-only" in client.get("/api/health").json()["code_validation"]["execution"]
+
+
 def test_image_upload_is_saved_and_deleted(tmp_path: Path, monkeypatch) -> None:
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir()

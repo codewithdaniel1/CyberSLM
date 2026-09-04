@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
+from cyberslm.code_validation import CCodeValidator, validation_footer
 from cyberslm.config import settings
 from cyberslm.database import Database
 from cyberslm.knowledge import KnowledgeStore
@@ -36,6 +37,11 @@ knowledge_embedder = (
 )
 model_backend = create_backend(settings)
 knowledge_sync = KnowledgeSyncManager()
+code_validator = CCodeValidator(
+    enabled=settings.code_validation_enabled,
+    configured_compiler=settings.c_compiler,
+    timeout_seconds=max(0.5, settings.code_validation_timeout),
+)
 _generation_lock = threading.Lock()
 _generations: dict[str, threading.Event] = {}
 
@@ -78,6 +84,7 @@ class PreparedMessage:
     request: GenerationRequest
     knowledge_documents: list[dict]
     retrieval_decision: RetrievalDecision
+    code_validation_requested: bool
 
 
 def require_conversation(conversation_id: str) -> dict:
@@ -157,6 +164,7 @@ async def prepare_message(
     mode: str | None,
     authorization_context: str | None,
     rag_policy: str,
+    validate_code: bool,
     images: list[UploadFile] | None,
 ) -> PreparedMessage:
     conversation = require_conversation(conversation_id)
@@ -228,10 +236,19 @@ async def prepare_message(
         ),
         knowledge_documents=knowledge_documents,
         retrieval_decision=retrieval_decision,
+        code_validation_requested=validate_code,
     )
 
 
-def persist_message(prepared: PreparedMessage, response_text: str) -> dict:
+def apply_code_validation(prepared: PreparedMessage, response_text: str) -> tuple[str, dict]:
+    report = code_validator.validate(
+        response_text,
+        requested=prepared.code_validation_requested,
+    )
+    return response_text + validation_footer(report), report
+
+
+def persist_message(prepared: PreparedMessage, response_text: str, code_validation: dict) -> dict:
     user_message = db.add_message(
         prepared.conversation_id,
         "user",
@@ -256,6 +273,7 @@ def persist_message(prepared: PreparedMessage, response_text: str) -> dict:
         "model": model_backend.status,
         "knowledge": public_knowledge(prepared.knowledge_documents),
         "rag": prepared.retrieval_decision.metadata(len(prepared.knowledge_documents)),
+        "code_validation": code_validation,
     }
 
 
@@ -329,6 +347,7 @@ def health() -> dict:
         "knowledge": knowledge_store.status(),
         "rag_enabled": settings.rag_enabled,
         "rag_semantic_enabled": settings.rag_semantic_enabled,
+        "code_validation": code_validator.status,
     }
 
 
@@ -456,6 +475,7 @@ async def send_message(
     mode: Annotated[str | None, Form()] = None,
     authorization_context: Annotated[str | None, Form()] = None,
     rag_policy: Annotated[str, Form()] = "auto",
+    validate_code: Annotated[bool, Form()] = False,
     images: Annotated[list[UploadFile] | None, File()] = None,
 ) -> dict:
     prepared = await prepare_message(
@@ -464,6 +484,7 @@ async def send_message(
         mode,
         authorization_context,
         rag_policy,
+        validate_code,
         images,
     )
     try:
@@ -474,7 +495,12 @@ async def send_message(
     except RuntimeError as exc:
         delete_attachments(prepared.attachments)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return persist_message(prepared, response_text)
+    response_text, validation = await run_in_threadpool(
+        apply_code_validation,
+        prepared,
+        response_text,
+    )
+    return persist_message(prepared, response_text, validation)
 
 
 @app.post("/api/conversations/{conversation_id}/messages/stream")
@@ -484,6 +510,7 @@ async def stream_message(
     mode: Annotated[str | None, Form()] = None,
     authorization_context: Annotated[str | None, Form()] = None,
     rag_policy: Annotated[str, Form()] = "auto",
+    validate_code: Annotated[bool, Form()] = False,
     images: Annotated[list[UploadFile] | None, File()] = None,
 ) -> StreamingResponse:
     prepared = await prepare_message(
@@ -492,6 +519,7 @@ async def stream_message(
         mode,
         authorization_context,
         rag_policy,
+        validate_code,
         images,
     )
     generation_id = uuid.uuid4().hex
@@ -508,6 +536,10 @@ async def stream_message(
                 generation_id=generation_id,
                 knowledge=public_knowledge(prepared.knowledge_documents),
                 rag=prepared.retrieval_decision.metadata(len(prepared.knowledge_documents)),
+                code_validation={
+                    "requested": prepared.code_validation_requested,
+                    **code_validator.status,
+                },
             )
             for chunk in model_backend.stream(prepared.request, cancellation.is_set):
                 chunks.append(chunk)
@@ -515,7 +547,8 @@ async def stream_message(
             response_text = "".join(chunks).strip()
             if not response_text:
                 response_text = "The model returned an empty response."
-            result = persist_message(prepared, response_text)
+            response_text, validation = apply_code_validation(prepared, response_text)
+            result = persist_message(prepared, response_text, validation)
             completed = True
             yield ndjson_event("done", result=result)
         except GenerationCancelled:

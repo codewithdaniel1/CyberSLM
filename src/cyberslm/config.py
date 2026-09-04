@@ -61,6 +61,9 @@ class Settings:
     )
     rag_results: int = _int_env("CYBERSLM_RAG_RESULTS", 4)
     rag_max_chars: int = _int_env("CYBERSLM_RAG_MAX_CHARS", 16_000)
+    code_validation_enabled: bool = _bool_env("CYBERSLM_CODE_VALIDATION_ENABLED", True)
+    c_compiler: str | None = os.getenv("CYBERSLM_C_COMPILER", "").strip() or None
+    code_validation_timeout: float = _float_env("CYBERSLM_CODE_VALIDATION_TIMEOUT", 4.0)
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

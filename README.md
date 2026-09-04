@@ -18,6 +18,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Reproducible baseline evaluation and run comparison CLI
 - Local hybrid citation-aware RAG over pinned MITRE ATT&CK, CWE, and CAPEC releases
 - Per-message Auto/On/Off knowledge control with a deterministic source-aware relevance gate
+- Opt-in local C syntax validation that never links or executes generated programs
 - Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
 - Resumable semantic indexing with visible progress and pre-generation source previews
 - One-click background knowledge sync with hash verification and visible progress
@@ -85,6 +86,9 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_RAG_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Local FastEmbed model |
 | `CYBERSLM_RAG_RESULTS` | `4` | Maximum references retrieved per prompt |
 | `CYBERSLM_RAG_MAX_CHARS` | `16000` | Maximum retrieved context characters |
+| `CYBERSLM_CODE_VALIDATION_ENABLED` | `true` | Permit opt-in local C syntax checking |
+| `CYBERSLM_C_COMPILER` | auto-detected | Optional `clang`, `gcc`, or `cc` command/path |
+| `CYBERSLM_CODE_VALIDATION_TIMEOUT` | `4` | Maximum seconds per fenced C block |
 | `ORT_DISABLE_TELEMETRY` | `1` | Keep the ONNX embedding runtime telemetry-disabled |
 
 Run the environment check at any time:
@@ -168,6 +172,25 @@ There is no fine-tuning dataset yet. Mode prompts shape behavior, the local know
 provides factual context, evaluation datasets measure behavior, and private conversations are
 not training data. See [`docs/knowledge.md`](docs/knowledge.md) for the complete data map,
 retrieval behavior, and source attribution.
+
+## Generated C syntax validation
+
+Enable **Check generated C syntax** for an individual message to inspect fenced `c` blocks with
+a compatible local `clang`, `gcc`, or `cc`. CyberSLM invokes the compiler directly with C17,
+warnings, and `-fsyntax-only`; it never links or executes the generated program. The saved
+assistant response includes the bounded local diagnostics so a failed check cannot be mistaken
+for working code.
+
+The checker is off per message by default. It checks at most four blocks, rejects blocks over
+50,000 characters, stops each compiler process after the configured timeout, truncates diagnostic
+output, and rejects non-literal, absolute, or parent-traversing includes before compilation. Set
+`CYBERSLM_CODE_VALIDATION_ENABLED=false` to remove the option or `CYBERSLM_C_COMPILER` to select
+a specific compiler.
+
+A passed syntax check proves only that the local compiler accepted the translation unit. It does
+not prove correct behavior, safe memory use, successful linking, available runtime dependencies,
+or security suitability. Generated code still requires human review and testing in an isolated
+environment.
 
 ## Evaluation
 
@@ -281,7 +304,7 @@ Completed through v0.5: passage chunking, local embeddings, hybrid vector/FTS5 r
 reciprocal-rank reranking, retrieval/citation/safety metrics, resumable indexing, source
 previews, CAPEC, CI/package builds, token streaming, cancellation, in-app verified knowledge
 sync, selective Auto/On/Off RAG, adapter loading, a reviewed-data LoRA workflow, verified
-private backups, and tagged GitHub release automation.
+private backups, opt-in non-executing C syntax validation, and tagged GitHub release automation.
 
 Remaining work should proceed in this order:
 
@@ -289,22 +312,19 @@ Remaining work should proceed in this order:
    human scoring and independently sourced coverage for correctness, groundedness, refusal
    quality, prompt-injection resistance, and the other CyberSLM modes. Expand the initial
    synthetic Auto-routing slice with independently reviewed prompts.
-2. **Validate generated code:** add opt-in, resource-limited compiler syntax checks that never
-   execute generated programs, report exact diagnostics, and work only when a compatible local
-   compiler is available.
-3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
-4. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
+3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-5. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
+4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
    pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
    Windows without introducing a hosted-model dependency.
-6. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 2: add non-executing C syntax validation, then use its
-diagnostics in the next reviewed external-benchmark sample.
+The immediate next milestone is item 1: add independently reviewed evaluation prompts for the
+remaining cyber modes, then use the expanded evidence to choose the next knowledge source.
 
 ## Authorization context
 

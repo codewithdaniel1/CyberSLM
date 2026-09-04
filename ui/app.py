@@ -193,6 +193,8 @@ if "active_generation_id" not in st.session_state:
     st.session_state.active_generation_id = None
 if "rag_policy" not in st.session_state:
     st.session_state.rag_policy = "Auto"
+if "validate_code" not in st.session_state:
+    st.session_state.validate_code = False
 
 
 with st.sidebar:
@@ -461,6 +463,24 @@ if health.get("rag_enabled"):
     )
 else:
     st.caption("Local knowledge is disabled by CYBERSLM_RAG_ENABLED.")
+validation_status = health.get("code_validation", {})
+validate_code = st.toggle(
+    "Check generated C syntax",
+    key="validate_code",
+    disabled=not (
+        validation_status.get("enabled") and validation_status.get("available")
+    ),
+    help=(
+        "Opt in per message. CyberSLM sends fenced C blocks to the local compiler with "
+        "-fsyntax-only; it never links or executes generated programs."
+    ),
+)
+if validation_status.get("enabled") and validation_status.get("available"):
+    st.caption(
+        f"Uses local {validation_status['compiler']} with time and size limits; execution is off."
+    )
+elif validation_status.get("enabled"):
+    st.caption("No compatible local C compiler was found; syntax checking is unavailable.")
 prompt = st.chat_input(f"Ask CyberSLM in {selected['name']} mode…")
 
 if prompt:
@@ -487,6 +507,7 @@ if prompt:
                 "mode": selected["key"],
                 "authorization_context": authorization["key"],
                 "rag_policy": (rag_policy or "Auto").lower(),
+                "validate_code": str(bool(validate_code)).lower(),
             },
             files=files,
         ) as response:
