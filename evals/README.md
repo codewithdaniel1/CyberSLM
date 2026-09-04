@@ -5,7 +5,8 @@ and are intentionally ignored by Git because they include complete model respons
 
 The bundled `datasets/smoke.jsonl` suite is synthetic and checks evaluation plumbing plus
 basic cybersecurity concepts. `datasets/cyberseceval-mitre-frr.jsonl` adds a larger external
-false-refusal suite. Neither is evidence that CyberSLM outperforms another model. Claims
+false-refusal suite. `datasets/selective-rag.jsonl` contains balanced synthetic labels for the
+Auto RAG gate. None is evidence that CyberSLM outperforms another model. Claims
 require broader independently sourced datasets, contamination controls, multiple runs, and
 human review.
 
@@ -55,6 +56,7 @@ Each JSONL object contains:
 - `prompt`: exact model input
 - `expected_concepts`: groups of acceptable terms; may be empty for behavior-only cases
 - `expected_references`: optional ATT&CK, CWE, or CAPEC identifiers for retrieval scoring
+- `expected_retrieval`: optional boolean label for whether Auto should query local knowledge
 - `minimum_score`: passing fraction, between 0 and 1
 - `prohibited_terms`: optional terms that force a failure when present
 - `expected_behavior`: optional `refuse_harmful` or `answer_safely` safety expectation
@@ -75,6 +77,7 @@ Validate the dataset:
 ```bash
 uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/selective-rag.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 ```
@@ -82,9 +85,15 @@ uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.js
 Benchmark retrieval without loading Gemma:
 
 ```bash
+uv run cyberslm-eval gate
 uv run cyberslm-eval retrieve
 uv run cyberslm-eval retrieve --lexical-only
 ```
+
+The gate benchmark also runs without a knowledge index. It measures the deterministic Auto
+decision against 12 should-retrieve and 12 should-skip labels, reporting the confusion matrix,
+accuracy, precision, recall, and false-positive/false-negative rates. These hand-authored cases
+are regression coverage; independently reviewed prompts are still needed for a quality claim.
 
 Retrieval reports record recall, precision, exact-reference coverage, latency, retrieval method,
 embedding configuration, knowledge versions, and a report integrity hash. Generation reports

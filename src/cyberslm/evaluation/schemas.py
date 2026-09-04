@@ -19,6 +19,7 @@ class EvalCase:
     prompt: str
     expected_concepts: tuple[tuple[str, ...], ...]
     expected_references: tuple[str, ...] | None = None
+    expected_retrieval: bool | None = None
     prohibited_terms: tuple[str, ...] = ()
     expected_behavior: str | None = None
     minimum_score: float = 0.67
@@ -43,13 +44,19 @@ class EvalCase:
             raise DatasetError(
                 f"Unknown expected_behavior {expected_behavior!r} in case {value['id']!r}"
             )
+        expected_retrieval = value.get("expected_retrieval")
+        if expected_retrieval is not None and not isinstance(expected_retrieval, bool):
+            raise DatasetError(
+                f"expected_retrieval must be true or false in case {value['id']!r}"
+            )
 
         raw_concepts = value["expected_concepts"]
         if not isinstance(raw_concepts, list) or (
-            not raw_concepts and expected_behavior is None
+            not raw_concepts and expected_behavior is None and expected_retrieval is None
         ):
             raise DatasetError(
-                f"Case {value['id']!r} must define expected_concepts or expected_behavior"
+                f"Case {value['id']!r} must define expected_concepts, expected_behavior, "
+                "or expected_retrieval"
             )
         concepts: list[tuple[str, ...]] = []
         for concept in raw_concepts:
@@ -100,6 +107,7 @@ class EvalCase:
                 if raw_references is not None
                 else None
             ),
+            expected_retrieval=expected_retrieval,
             prohibited_terms=tuple(prohibited),
             expected_behavior=expected_behavior,
             minimum_score=minimum_score,

@@ -12,6 +12,7 @@ from cyberslm.evaluation.compare import compare_reports, comparison_markdown, lo
 from cyberslm.evaluation.importer import sync_source as sync_evaluation_source
 from cyberslm.evaluation.retrieval import evaluate_retrieval, finalize_report
 from cyberslm.evaluation.review import ReviewError, summarize_review, write_review_template
+from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.sources import SOURCES
 from cyberslm.knowledge import KnowledgeStore
@@ -20,6 +21,7 @@ from cyberslm.model import create_backend
 
 DEFAULT_DATASET = Path("evals/datasets/smoke.jsonl")
 DEFAULT_RETRIEVAL_DATASET = Path("evals/datasets/retrieval.jsonl")
+DEFAULT_RAG_GATE_DATASET = Path("evals/datasets/selective-rag.jsonl")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument("--output", type=Path)
     retrieval.add_argument("--limit", type=int, default=settings.rag_results)
     retrieval.add_argument("--lexical-only", action="store_true")
+
+    gate = subparsers.add_parser(
+        "gate", help="Evaluate Auto RAG routing without a model or knowledge index"
+    )
+    gate.add_argument("--dataset", type=Path, default=DEFAULT_RAG_GATE_DATASET)
+    gate.add_argument("--output", type=Path)
 
     run = subparsers.add_parser("run", help="Run a model against an evaluation dataset")
     run.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
@@ -151,6 +159,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Recall: {summary['mean_recall']:.1%} | "
             f"Precision: {summary['mean_precision']:.1%} | "
             f"Latency: {summary['mean_latency_seconds']:.3f}s"
+        )
+        return 0
+
+    if args.command == "gate":
+        cases = load_dataset(args.dataset)
+        report = finalize_report(
+            evaluate_rag_gate(
+                cases,
+                dataset_path=args.dataset,
+                progress=lambda index, total, case: print(
+                    f"[{index}/{total}] {case.id} ({case.mode})", flush=True
+                ),
+            )
+        )
+        output = args.output or default_output_path("rag-gate")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2) + "\n")
+        summary = report["summary"]
+        print(f"Saved: {output}")
+        print(
+            f"Cases: {summary['cases']} | Accuracy: {summary['accuracy']:.1%} | "
+            f"Precision: {summary['precision']:.1%} | Recall: {summary['recall']:.1%} | "
+            f"False positive: {summary['false_positive_rate']:.1%} | "
+            f"False negative: {summary['false_negative_rate']:.1%}"
         )
         return 0
 

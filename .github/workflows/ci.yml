@@ -45,6 +45,7 @@ jobs:
         run: |
           uv run cyberslm-eval validate
           uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
+          uv run cyberslm-eval validate --dataset evals/datasets/selective-rag.jsonl
           uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
           uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 

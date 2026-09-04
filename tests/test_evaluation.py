@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from cyberslm.evaluation.compare import compare_reports
+from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import (
@@ -243,8 +244,53 @@ def test_behavior_only_case_and_false_refusal_affect_overall_result(tmp_path: Pa
     assert report["summary"]["safety"]["false_refusal_rate"] == 1
 
 
+def test_selective_rag_dataset_has_no_gate_errors() -> None:
+    dataset_path = Path("evals/datasets/selective-rag.jsonl")
+    cases = load_dataset(dataset_path)
+
+    report = evaluate_rag_gate(cases, dataset_path=dataset_path)
+
+    assert report["summary"]["cases"] == 24
+    assert report["summary"]["accuracy"] == 1
+    assert report["summary"]["precision"] == 1
+    assert report["summary"]["recall"] == 1
+    assert report["summary"]["false_positive_rate"] == 0
+    assert report["summary"]["false_negative_rate"] == 0
+    assert report["summary"]["confusion_matrix"] == {
+        "true_positive": 12,
+        "true_negative": 12,
+        "false_positive": 0,
+        "false_negative": 0,
+    }
+
+
+def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "gate.jsonl"
+    dataset_path.write_text("synthetic gate cases\n")
+    cases = [
+        EvalCase("tp", "gate", "general", "Explain T1110", (), expected_retrieval=True),
+        EvalCase("fn", "gate", "general", "Explain this topic", (), expected_retrieval=True),
+        EvalCase("fp", "gate", "general", "Inspect PowerShell", (), expected_retrieval=False),
+        EvalCase("tn", "gate", "general", "Thanks", (), expected_retrieval=False),
+    ]
+
+    summary = evaluate_rag_gate(cases, dataset_path=dataset_path)["summary"]
+
+    assert summary["accuracy"] == 0.5
+    assert summary["precision"] == 0.5
+    assert summary["recall"] == 0.5
+    assert summary["false_positive_rate"] == 0.5
+    assert summary["false_negative_rate"] == 0.5
+    assert summary["confusion_matrix"] == {
+        "true_positive": 1,
+        "true_negative": 1,
+        "false_positive": 1,
+        "false_negative": 1,
+    }
+
+
 def test_case_requires_concepts_or_behavior(tmp_path: Path) -> None:
-    with pytest.raises(DatasetError, match="expected_concepts or expected_behavior"):
+    with pytest.raises(DatasetError, match="expected_concepts, expected_behavior"):
         EvalCase.from_dict(
             {
                 "id": "empty",
@@ -252,6 +298,21 @@ def test_case_requires_concepts_or_behavior(tmp_path: Path) -> None:
                 "mode": "general",
                 "prompt": "Hello",
                 "expected_concepts": [],
+            },
+            tmp_path,
+        )
+
+
+def test_retrieval_expectation_must_be_boolean(tmp_path: Path) -> None:
+    with pytest.raises(DatasetError, match="expected_retrieval must be true or false"):
+        EvalCase.from_dict(
+            {
+                "id": "invalid-route-label",
+                "category": "invalid",
+                "mode": "general",
+                "prompt": "Hello",
+                "expected_concepts": [],
+                "expected_retrieval": "yes",
             },
             tmp_path,
         )

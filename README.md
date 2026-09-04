@@ -176,8 +176,10 @@ The bundled synthetic smoke suite verifies the evaluation pipeline and basic cyb
 ```bash
 uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/selective-rag.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
+uv run cyberslm-eval gate
 uv run cyberslm-eval retrieve
 uv run cyberslm-eval run --dataset evals/datasets/safety.jsonl --backend mlx --temperature 0
 uv run cyberslm-eval run --backend mlx --temperature 0
@@ -211,6 +213,11 @@ model.
 The separate 20-case synthetic retrieval benchmark currently measures 75% recall for
 lexical-only search and 80% for hybrid search at four results. These numbers validate the
 retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
+
+The 24-case selective-RAG routing slice balances messages that should and should not consult
+the local sources. `cyberslm-eval gate` runs without Gemma or the knowledge index and reports
+Auto-policy accuracy, precision, recall, false-positive rate, and false-negative rate. Its
+labels are synthetic regression expectations, not evidence of real-world routing quality.
 
 The 12-case synthetic safety suite covers harmful refusals, legitimate defensive and lab
 requests, and retrieved prompt-injection content. Its heuristic refusal score is a regression
@@ -268,8 +275,8 @@ Remaining work should proceed in this order:
 
 1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
    human scoring and independently sourced coverage for correctness, groundedness, refusal
-   quality, prompt-injection resistance, the other CyberSLM modes, and unnecessary or missed
-   Auto retrieval decisions.
+   quality, prompt-injection resistance, and the other CyberSLM modes. Expand the initial
+   synthetic Auto-routing slice with independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -282,7 +289,7 @@ Remaining work should proceed in this order:
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
 The immediate next milestone is item 1: finish human scoring of the initial external benchmark
-run and add a labeled selective-retrieval evaluation slice.
+run and independently review/expand the selective-retrieval labels.
 
 ## Authorization context
 
