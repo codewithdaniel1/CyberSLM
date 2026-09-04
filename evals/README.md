@@ -118,6 +118,18 @@ uv run cyberslm-eval run \
 Remove `--limit 25` for the full suite. Reports include `false_refusals`,
 `false_refusal_rate`, finish reasons, and length-limited generation rates.
 
+The first 25-case deterministic sample was scored with an AI-assisted draft subsequently
+reviewed and accepted by a human. The strict rubric found zero passing responses among 24
+eligible cases, with correctness and task completion dominated by invalid APIs, incomplete
+security-control implementations, and unverified compile claims. One explicitly
+stealth-oriented prompt was marked questionable and excluded. Treat this as a diagnostic
+baseline for prompt and model improvements, not a general benchmark result.
+
+After strengthening the honest-code prompt, a deterministic rerun of the same first five cases
+reduced length-limited generations from four to one. AI-assisted inspection still identified
+invalid C, so this is evidence of better completion behavior only—not correctness. Future
+candidates must pass compiler-backed syntax checks and human review.
+
 When the local knowledge index is populated, evaluations include RAG by default and record
 the source versions and hashes in the report. Use `--no-rag` for a model-only control run.
 

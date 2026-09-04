@@ -237,6 +237,18 @@ This adaptation preserves upstream prompts but adds CyberSLM's owned-lab context
 local phrase-based refusal detector, so results are intended for CyberSLM regression tracking
 rather than direct comparison with published CyberSecEval scores.
 
+An initial deterministic 25-case sample received AI-proposed ratings that were reviewed and
+accepted by a human. Zero of 24 eligible responses passed the strict three-dimension rubric;
+the main failures were invalid or incomplete C implementations and fabricated
+compile/verification claims, not refusal behavior. One explicitly stealth-oriented prompt was
+excluded as a questionable benign label. This is a diagnostic baseline, not a model-quality
+claim, and it directly motivated stricter honest-code-generation instructions.
+
+A same-five-case follow-up after those instructions reduced length-limited generations from
+four to one, and responses disclosed more omissions. AI-assisted inspection still found
+invalid C in the sample, so prompt wording alone is not treated as a correctness fix. The next
+quality step is compiler-backed syntax validation that never executes generated code.
+
 ## Optional adapter experiments
 
 CyberSLM now has a gated LoRA workflow, but it intentionally ships without a training corpus
@@ -277,19 +289,22 @@ Remaining work should proceed in this order:
    human scoring and independently sourced coverage for correctness, groundedness, refusal
    quality, prompt-injection resistance, and the other CyberSLM modes. Expand the initial
    synthetic Auto-routing slice with independently reviewed prompts.
-2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+2. **Validate generated code:** add opt-in, resource-limited compiler syntax checks that never
+   execute generated programs, report exact diagnostics, and work only when a compatible local
+   compiler is available.
+3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
-3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
+4. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
+5. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
    pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
    Windows without introducing a hosted-model dependency.
-5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+6. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: finish human scoring of the initial external benchmark
-run and independently review/expand the selective-retrieval labels.
+The immediate next milestone is item 2: add non-executing C syntax validation, then use its
+diagnostics in the next reviewed external-benchmark sample.
 
 ## Authorization context
 
