@@ -201,6 +201,7 @@ uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/selective-rag.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/mode-coverage.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 uv run cyberslm-eval gate
 uv run cyberslm-eval retrieve
@@ -208,7 +209,7 @@ uv run cyberslm-eval run --dataset evals/datasets/safety.jsonl --backend mlx --t
 uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
-Reports include the complete responses, deterministic concept scores, category summaries,
+Reports include the complete responses, deterministic concept scores, category and mode summaries,
 latency, model configuration, environment metadata, and hashes of both the dataset and mode
 prompts. They also record auditable refusal phrase matches and authoritative runtime finish
 reasons so token-limit truncation is not inferred from prose. Compare a later candidate
@@ -309,9 +310,10 @@ private backups, opt-in non-executing C syntax validation, and tagged GitHub rel
 Remaining work should proceed in this order:
 
 1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
-   human scoring and independently sourced coverage for correctness, groundedness, refusal
-   quality, prompt-injection resistance, and the other CyberSLM modes. Expand the initial
-   synthetic Auto-routing slice with independently reviewed prompts.
+   human scoring and independently sourced coverage. A balanced 24-case synthetic draft now
+   covers correctness, groundedness, prompt-injection resistance, and safety boundaries across
+   all six modes, but it must be human-reviewed before it becomes release evidence. Expand the
+   initial synthetic Auto-routing slice with independently reviewed prompts as well.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -323,8 +325,9 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: add independently reviewed evaluation prompts for the
-remaining cyber modes, then use the expanded evidence to choose the next knowledge source.
+The immediate next milestone is item 1: review and approve the balanced mode-coverage draft,
+run its deterministic MLX baseline, and use the expanded evidence to choose the next knowledge
+source.
 
 ## Authorization context
 

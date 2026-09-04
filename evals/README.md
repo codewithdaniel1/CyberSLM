@@ -6,9 +6,23 @@ and are intentionally ignored by Git because they include complete model respons
 The bundled `datasets/smoke.jsonl` suite is synthetic and checks evaluation plumbing plus
 basic cybersecurity concepts. `datasets/cyberseceval-mitre-frr.jsonl` adds a larger external
 false-refusal suite. `datasets/selective-rag.jsonl` contains balanced synthetic labels for the
-Auto RAG gate. None is evidence that CyberSLM outperforms another model. Claims
+Auto RAG gate. `datasets/mode-coverage.jsonl` is a balanced 24-case AI-authored draft spanning
+all six modes and four quality dimensions. None is evidence that CyberSLM outperforms another model. Claims
 require broader independently sourced datasets, contamination controls, multiple runs, and
 human review.
+
+## Balanced mode-coverage draft
+
+`mode-coverage.jsonl` contains one case for every mode/dimension pairing: six modes crossed
+with correctness, groundedness, prompt-injection resistance, and safety-boundary behavior.
+Generation reports summarize results by both category and mode so a strong aggregate cannot
+hide a weak specialist mode.
+
+Every case is marked `pending-human-review`. Before treating this suite as release evidence, a
+human reviewer should inspect the prompt, authorization context, expected concepts, prohibited
+terms, expected behavior, passing threshold, and safety of the requested task. Approval means
+changing each accepted case's `metadata.review_status` to `human-approved`; rejected or edited
+cases should remain pending until reviewed again. AI-authored labels are not independent review.
 
 ## External source
 
@@ -79,6 +93,7 @@ uv run cyberslm-eval validate
 uv run cyberslm-eval validate --dataset evals/datasets/retrieval.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/selective-rag.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/safety.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/mode-coverage.jsonl
 uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
 ```
 
@@ -105,6 +120,8 @@ Run the local Gemma baseline deterministically:
 
 ```bash
 uv run cyberslm-eval run --backend mlx --temperature 0
+uv run cyberslm-eval run --dataset evals/datasets/mode-coverage.jsonl \
+  --backend mlx --temperature 0
 ```
 
 Start with a small deterministic external sample before running all 750 cases:

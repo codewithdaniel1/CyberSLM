@@ -65,8 +65,10 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     categories: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    modes: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for result in results:
         categories[result["category"]].append(result)
+        modes[result["mode"]].append(result)
     retrieval = [item["retrieval_evaluation"] for item in results]
     retrieval = [item for item in retrieval if item is not None]
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
@@ -88,6 +90,7 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
+        "modes": {name: aggregate(items) for name, items in sorted(modes.items())},
         "retrieval": {
             "cases": len(retrieval),
             "passed": sum(item["passed"] for item in retrieval),

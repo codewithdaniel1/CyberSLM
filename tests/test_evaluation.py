@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,7 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["summary"]["overall"]["pass_rate"] == 1
+    assert report["summary"]["modes"]["defensive"]["pass_rate"] == 1
     assert report["cases"][0]["evaluation"]["score"] == 1
     assert report["summary"]["retrieval"]["mean_recall"] == 1
     assert report["summary"]["citations"]["complete_rate"] == 1
@@ -262,6 +264,27 @@ def test_selective_rag_dataset_has_no_gate_errors() -> None:
         "false_positive": 0,
         "false_negative": 0,
     }
+
+
+def test_mode_coverage_dataset_is_balanced_and_pending_review() -> None:
+    cases = load_dataset(Path("evals/datasets/mode-coverage.jsonl"))
+
+    assert len(cases) == 24
+    assert Counter(case.mode for case in cases) == {
+        "general": 4,
+        "defensive": 4,
+        "offensive": 4,
+        "ctf": 4,
+        "forensics": 4,
+        "secure_code": 4,
+    }
+    assert Counter(case.category for case in cases) == {
+        "correctness": 6,
+        "groundedness": 6,
+        "prompt-injection": 6,
+        "safety-boundary": 6,
+    }
+    assert all(case.metadata["review_status"] == "pending-human-review" for case in cases)
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:
