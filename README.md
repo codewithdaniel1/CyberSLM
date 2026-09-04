@@ -17,6 +17,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Lazy model loading and a mock backend for development
 - Reproducible baseline evaluation and run comparison CLI
 - Local hybrid citation-aware RAG over pinned MITRE ATT&CK, CWE, and CAPEC releases
+- Per-message Auto/On/Off knowledge control with a deterministic source-aware relevance gate
 - Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
 - Resumable semantic indexing with visible progress and pre-generation source previews
 - One-click background knowledge sync with hash verification and visible progress
@@ -79,7 +80,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MAX_UPLOAD_MB` | `10` | Per-image upload limit |
 | `CYBERSLM_API_PORT` | `8000` | Local API port |
 | `CYBERSLM_UI_PORT` | `8501` | Local UI port |
-| `CYBERSLM_RAG_ENABLED` | `true` | Enable local knowledge retrieval |
+| `CYBERSLM_RAG_ENABLED` | `true` | Master switch permitting local knowledge retrieval |
 | `CYBERSLM_RAG_SEMANTIC_ENABLED` | `true` | Combine embeddings with FTS5 retrieval |
 | `CYBERSLM_RAG_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Local FastEmbed model |
 | `CYBERSLM_RAG_RESULTS` | `4` | Maximum references retrieved per prompt |
@@ -156,10 +157,12 @@ with the selected passages, generates a grounded response, and appends the exact
 references. It does not change or fine-tune the Gemma weights. If semantic vectors are missing
 or incomplete, retrieval safely falls back to FTS5 until `embed` finishes the resumable build.
 
-Today, enabling RAG makes the server attempt local retrieval for each message; CTF mode skips
-that attempt unless the prompt names an ATT&CK, CWE, or CAPEC reference, and an empty result
-adds no context. There is not yet a per-message `auto`/`on`/`off` control or a general relevance
-gate. Selective retrieval is tracked as the next roadmap improvement.
+Each message has a **Local knowledge** policy. **Auto** (recommended) searches only when the
+prompt contains an exact ATT&CK/CWE/CAPEC identifier or source-relevant cyber signals for the
+selected mode. **On** always attempts a local search, and **Off** skips it. The API accepts the
+same policy as the `rag_policy` form field and returns a `rag` decision object so clients can
+show whether retrieval was attempted and used. `CYBERSLM_RAG_ENABLED=false` remains a master
+switch: no per-message choice can override it.
 
 There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
 provides factual context, evaluation datasets measure behavior, and private conversations are
@@ -258,29 +261,28 @@ Work should proceed in this order:
 Completed through v0.5: passage chunking, local embeddings, hybrid vector/FTS5 retrieval,
 reciprocal-rank reranking, retrieval/citation/safety metrics, resumable indexing, source
 previews, CAPEC, CI/package builds, token streaming, cancellation, in-app verified knowledge
-sync, adapter loading, a reviewed-data LoRA workflow, verified private backups, and tagged
-GitHub release automation.
+sync, selective Auto/On/Off RAG, adapter loading, a reviewed-data LoRA workflow, verified
+private backups, and tagged GitHub release automation.
 
 Remaining work should proceed in this order:
 
 1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
    human scoring and independently sourced coverage for correctness, groundedness, refusal
-   quality, prompt-injection resistance, and the other CyberSLM modes.
-2. **Make RAG selective:** add a relevance gate plus a per-message `auto`/`on`/`off` control,
-   while preserving exact-ID lookup and measuring both unnecessary and missed retrieval.
-3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+   quality, prompt-injection resistance, the other CyberSLM modes, and unnecessary or missed
+   Auto retrieval decisions.
+2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
-4. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
+3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-5. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
+4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
    pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
    Windows without introducing a hosted-model dependency.
-6. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: human-review an initial external benchmark run and
-define the next independently licensed evaluation slice from its observed gaps.
+The immediate next milestone is item 1: finish human scoring of the initial external benchmark
+run and add a labeled selective-retrieval evaluation slice.
 
 ## Authorization context
 

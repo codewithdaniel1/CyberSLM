@@ -37,6 +37,8 @@ def test_ui_displays_local_knowledge_status() -> None:
     assert "local source(s) selected" in source
     assert "retrieval_method" in source
     assert "Sync verified knowledge" in source
+    assert 'options=["Auto", "On", "Off"]' in source
+    assert '"rag_policy": (rag_policy or "Auto").lower()' in source
 
 
 def test_ui_uses_cancellable_streaming_generation() -> None:

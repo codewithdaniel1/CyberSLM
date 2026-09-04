@@ -51,11 +51,21 @@ index if a download or validation fails.
 
 The app still works when the index is absent. The sidebar will say `RAG empty`, and model
 answers will use only Gemma and the selected mode prompt. Set `CYBERSLM_RAG_ENABLED=false`
-to disable retrieval without deleting the local index.
+to disable retrieval without deleting the local index. This is a master switch and cannot be
+overridden by the per-message control.
 
 ## Retrieval behavior
 
-Retrieval is non-agentic and read-only:
+Retrieval is non-agentic and read-only. Before searching, each message applies one of three
+policies:
+
+- **Auto** (recommended) searches for exact ATT&CK/CWE/CAPEC IDs and when deterministic,
+  mode-aware signals indicate that the local sources are relevant.
+- **On** always attempts a search, which is useful when the automatic gate misses a query.
+- **Off** skips local retrieval for that message.
+
+The request API accepts these values in the `rag_policy` form field and includes its decision
+and reason in the returned `rag` object. When a search proceeds:
 
 1. Source documents are deterministically split into overlapping passages.
 2. The latest question is searched with SQLite FTS5 and a local BGE embedding.

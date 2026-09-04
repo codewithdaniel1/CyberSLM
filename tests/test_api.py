@@ -55,6 +55,14 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     assert "Mock Defensive response" in response.json()["assistant"]["content"]
     assert "Local references consulted" in response.json()["assistant"]["content"]
     assert response.json()["knowledge"][0]["id"] == "attack:T1110"
+    assert response.json()["rag"] == {
+        "policy": "auto",
+        "attempted": True,
+        "used": True,
+        "reason": "source_relevant",
+        "source_keys": ["attack"],
+        "document_count": 1,
+    }
 
     loaded = client.get(f"/api/conversations/{conversation_id}").json()
     assert loaded["title"] == "Triage these failed SSH logins"
@@ -97,11 +105,40 @@ def test_chat_api_streams_ndjson_and_persists_on_completion(tmp_path: Path, monk
     assert response.headers["content-type"].startswith("application/x-ndjson")
     events = [json.loads(line) for line in response.text.splitlines()]
     assert events[0]["type"] == "start"
+    assert events[0]["rag"]["policy"] == "auto"
+    assert events[0]["rag"]["attempted"] is False
+    assert events[0]["rag"]["reason"] == "not_source_relevant"
     assert any(event["type"] == "token" for event in events)
     assert events[-1]["type"] == "done"
 
     loaded = client.get(f"/api/conversations/{conversation['id']}").json()
     assert [message["role"] for message in loaded["messages"]] == ["user", "assistant"]
+
+
+def test_chat_api_validates_and_honors_rag_policy(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "db", Database(tmp_path / "api.db"))
+    monkeypatch.setattr(api_module, "model_backend", MockBackend())
+    monkeypatch.setattr(api_module, "knowledge_store", KnowledgeStore(tmp_path / "knowledge.db"))
+    client = TestClient(api_module.app)
+    conversation = client.post("/api/conversations", json={"mode": "general"}).json()
+    endpoint = f"/api/conversations/{conversation['id']}/messages"
+
+    invalid = client.post(endpoint, data={"content": "Hello", "rag_policy": "sometimes"})
+    assert invalid.status_code == 422
+
+    forced = client.post(endpoint, data={"content": "Hello", "rag_policy": "on"})
+    assert forced.status_code == 200
+    assert forced.json()["rag"]["attempted"] is True
+    assert forced.json()["rag"]["reason"] == "forced_for_message"
+
+    second_conversation = client.post("/api/conversations", json={"mode": "general"}).json()
+    disabled = client.post(
+        f"/api/conversations/{second_conversation['id']}/messages",
+        data={"content": "Explain T1110", "rag_policy": "off"},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["rag"]["attempted"] is False
+    assert disabled.json()["rag"]["reason"] == "disabled_for_message"
 
 
 def test_image_upload_is_saved_and_deleted(tmp_path: Path, monkeypatch) -> None:

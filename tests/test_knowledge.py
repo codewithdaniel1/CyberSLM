@@ -11,7 +11,7 @@ import pytest
 from cyberslm.knowledge.chunking import chunk_text
 from cyberslm.knowledge.embeddings import DEFAULT_EMBEDDING_MODEL
 from cyberslm.knowledge.ingest import parse_attack, parse_capec, parse_cwe, verify_payload
-from cyberslm.knowledge.retrieve import expanded_query, retrieve
+from cyberslm.knowledge.retrieve import decide_retrieval, expanded_query, retrieve
 from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 
@@ -107,6 +107,44 @@ def test_mode_aware_retrieval_and_query_expansion(tmp_path: Path) -> None:
     assert "T1110" in expanded_query("Investigate failed SSH logins")
     defensive_results = retrieve(store, "Investigate failed SSH logins", "defensive")
     assert [item["external_id"] for item in defensive_results] == ["T1110"]
+
+
+def test_selective_retrieval_policy() -> None:
+    ordinary = decide_retrieval("Thanks, that makes sense.", "general")
+    assert not ordinary.should_retrieve
+    assert ordinary.reason == "not_source_relevant"
+
+    defensive = decide_retrieval("Triage these failed SSH logins", "defensive")
+    assert defensive.should_retrieve
+    assert defensive.reason == "source_relevant"
+    assert defensive.source_keys == ("attack",)
+
+    code = decide_retrieval("Review this SQL injection bug", "secure_code")
+    assert code.should_retrieve
+    assert code.source_keys == ("cwe",)
+
+    exact = decide_retrieval("Explain T1110", "ctf")
+    assert exact.should_retrieve
+    assert exact.reason == "explicit_reference"
+    assert exact.source_keys == ("attack",)
+
+    assert decide_retrieval("Explain T1110", "general", "off").reason == "disabled_for_message"
+    assert decide_retrieval("Hello", "general", "on").reason == "forced_for_message"
+    assert not decide_retrieval("Explain T1110", "general", enabled=False).should_retrieve
+    with pytest.raises(ValueError, match="auto, on, off"):
+        decide_retrieval("Hello", "general", "sometimes")
+
+
+def test_exact_identifier_lookup_ignores_mode_source_routing(tmp_path: Path) -> None:
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    replace(
+        store,
+        "attack",
+        [document("attack:T1110", "T1110 Brute Force", "Failed password guessing")],
+    )
+
+    results = retrieve(store, "Explain T1110", "secure_code", source_keys=("cwe",))
+    assert results[0]["external_id"] == "T1110"
 
 
 def test_parse_attack_techniques() -> None:

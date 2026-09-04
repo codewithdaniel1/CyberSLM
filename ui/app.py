@@ -191,6 +191,8 @@ if "delete_confirmation" not in st.session_state:
     st.session_state.delete_confirmation = None
 if "active_generation_id" not in st.session_state:
     st.session_state.active_generation_id = None
+if "rag_policy" not in st.session_state:
+    st.session_state.rag_policy = "Auto"
 
 
 with st.sidebar:
@@ -443,6 +445,22 @@ uploads = st.file_uploader(
     accept_multiple_files=True,
     help="PNG, JPEG, or WebP; up to four images and 10 MB each.",
 )
+rag_policy = st.segmented_control(
+    "Local knowledge",
+    options=["Auto", "On", "Off"],
+    key="rag_policy",
+    disabled=not health.get("rag_enabled"),
+    help=(
+        "Auto searches local ATT&CK, CWE, or CAPEC references only when this message appears "
+        "to benefit. On always searches; Off answers without local references."
+    ),
+)
+if health.get("rag_enabled"):
+    st.caption(
+        "Auto is recommended: exact IDs always search, while ordinary conversation skips RAG."
+    )
+else:
+    st.caption("Local knowledge is disabled by CYBERSLM_RAG_ENABLED.")
 prompt = st.chat_input(f"Ask CyberSLM in {selected['name']} mode…")
 
 if prompt:
@@ -468,6 +486,7 @@ if prompt:
                 "content": prompt,
                 "mode": selected["key"],
                 "authorization_context": authorization["key"],
+                "rag_policy": (rag_policy or "Auto").lower(),
             },
             files=files,
         ) as response:
@@ -478,6 +497,7 @@ if prompt:
                 raise RuntimeError("The local generation stream did not start correctly.")
             st.session_state.active_generation_id = first["generation_id"]
             selected_sources = first.get("knowledge", [])
+            rag_result = first.get("rag", {})
             if selected_sources:
                 with st.expander(
                     f"{len(selected_sources)} local source(s) selected",
@@ -489,6 +509,12 @@ if prompt:
                             f"{source['source_key']} {source['source_version']} · "
                             f"{source['retrieval_method']}"
                         )
+            elif rag_result.get("attempted"):
+                st.caption("Local knowledge was searched, but no matching reference was found.")
+            elif rag_result.get("reason") == "not_source_relevant":
+                st.caption("Auto skipped local knowledge for this message.")
+            elif rag_result.get("reason") == "disabled_for_message":
+                st.caption("Local knowledge was off for this message.")
 
             with st.chat_message("assistant", avatar="assistant"):
                 st.button(

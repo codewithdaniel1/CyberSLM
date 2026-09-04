@@ -20,7 +20,7 @@ from cyberslm.database import Database
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.embeddings import LocalEmbedder, rebuild_embeddings
 from cyberslm.knowledge.ingest import sync_source
-from cyberslm.knowledge.retrieve import retrieve
+from cyberslm.knowledge.retrieve import RetrievalDecision, decide_retrieval, retrieve
 from cyberslm.knowledge.sources import SOURCES
 from cyberslm.knowledge.sync_job import KnowledgeSyncManager
 from cyberslm.model import GenerationCancelled, GenerationRequest, create_backend
@@ -77,6 +77,7 @@ class PreparedMessage:
     existing: list[dict]
     request: GenerationRequest
     knowledge_documents: list[dict]
+    retrieval_decision: RetrievalDecision
 
 
 def require_conversation(conversation_id: str) -> dict:
@@ -155,6 +156,7 @@ async def prepare_message(
     content: str,
     mode: str | None,
     authorization_context: str | None,
+    rag_policy: str,
     images: list[UploadFile] | None,
 ) -> PreparedMessage:
     conversation = require_conversation(conversation_id)
@@ -164,6 +166,15 @@ async def prepare_message(
     selected_authorization = authorization_context or conversation["authorization_context"]
     if selected_authorization not in AUTHORIZATION_CONTEXTS:
         raise HTTPException(status_code=422, detail="Unknown authorization context")
+    try:
+        retrieval_decision = decide_retrieval(
+            content,
+            selected_mode,
+            rag_policy,
+            enabled=settings.rag_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if images and len(images) > 4:
         raise HTTPException(status_code=413, detail="A maximum of four images is supported")
 
@@ -191,7 +202,7 @@ async def prepare_message(
             [],
         )
     knowledge_documents = []
-    if settings.rag_enabled:
+    if retrieval_decision.should_retrieve:
         knowledge_documents = retrieve(
             knowledge_store,
             content,
@@ -199,6 +210,7 @@ async def prepare_message(
             limit=settings.rag_results,
             max_chars=settings.rag_max_chars,
             embedder=knowledge_embedder,
+            source_keys=retrieval_decision.source_keys,
         )
     return PreparedMessage(
         conversation_id=conversation_id,
@@ -215,6 +227,7 @@ async def prepare_message(
             knowledge_documents,
         ),
         knowledge_documents=knowledge_documents,
+        retrieval_decision=retrieval_decision,
     )
 
 
@@ -242,6 +255,7 @@ def persist_message(prepared: PreparedMessage, response_text: str) -> dict:
         "assistant": assistant_message,
         "model": model_backend.status,
         "knowledge": public_knowledge(prepared.knowledge_documents),
+        "rag": prepared.retrieval_decision.metadata(len(prepared.knowledge_documents)),
     }
 
 
@@ -441,6 +455,7 @@ async def send_message(
     content: Annotated[str, Form(min_length=1, max_length=50_000)],
     mode: Annotated[str | None, Form()] = None,
     authorization_context: Annotated[str | None, Form()] = None,
+    rag_policy: Annotated[str, Form()] = "auto",
     images: Annotated[list[UploadFile] | None, File()] = None,
 ) -> dict:
     prepared = await prepare_message(
@@ -448,6 +463,7 @@ async def send_message(
         content,
         mode,
         authorization_context,
+        rag_policy,
         images,
     )
     try:
@@ -467,6 +483,7 @@ async def stream_message(
     content: Annotated[str, Form(min_length=1, max_length=50_000)],
     mode: Annotated[str | None, Form()] = None,
     authorization_context: Annotated[str | None, Form()] = None,
+    rag_policy: Annotated[str, Form()] = "auto",
     images: Annotated[list[UploadFile] | None, File()] = None,
 ) -> StreamingResponse:
     prepared = await prepare_message(
@@ -474,6 +491,7 @@ async def stream_message(
         content,
         mode,
         authorization_context,
+        rag_policy,
         images,
     )
     generation_id = uuid.uuid4().hex
@@ -489,6 +507,7 @@ async def stream_message(
                 "start",
                 generation_id=generation_id,
                 knowledge=public_knowledge(prepared.knowledge_documents),
+                rag=prepared.retrieval_decision.metadata(len(prepared.knowledge_documents)),
             )
             for chunk in model_backend.stream(prepared.request, cancellation.is_set):
                 chunks.append(chunk)
