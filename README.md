@@ -257,7 +257,10 @@ Remaining work should proceed in this order:
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-4. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
+   pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
+   Windows without introducing a hosted-model dependency.
+5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 

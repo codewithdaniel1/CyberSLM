@@ -21,6 +21,16 @@ def test_authorization_context_is_labeled_unverified() -> None:
     assert "never overrides" in prompt
 
 
+def test_secure_code_prompt_routes_generation_without_generic_review() -> None:
+    prompt = MODES["secure_code"].build_system_prompt("owned_lab")
+
+    assert "lead with the smallest complete implementation" in prompt
+    assert "under 600 output tokens" in prompt
+    assert "then stop" in prompt
+    assert "authorized defensive tooling" in prompt
+    assert "Do not emit review fields for a generation request" in prompt
+
+
 def test_mock_backend_reports_prompt_and_images(tmp_path: Path) -> None:
     backend = MockBackend()
     response = backend.generate(

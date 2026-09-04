@@ -135,11 +135,21 @@ MODES: dict[str, Mode] = {
         "secure_code",
         "Secure Code",
         "</>",
-        "Security-focused code review",
-        "Review code for vulnerabilities and unsafe assumptions. Explain exploitability, "
-        "severity, a minimal safe fix, and relevant CWE identifiers when confident.",
-        "Finding\nSeverity and CWE (when confident)\nExploitability\n"
-        "Minimal fix\nSafer code example\nVerification",
+        "Secure code generation and review",
+        "Handle both secure code generation and vulnerability review. For generation, lead "
+        "with the smallest complete implementation and keep the entire response under 600 "
+        "output tokens. If the requested system is too large, implement a complete minimal "
+        "core and name omitted production components in one sentence. Do not repeat the "
+        "request or add a generic security tutorial. Do not treat authorized defensive tooling "
+        "or ordinary system administration as harmful only because it changes system state. "
+        "For review, explain confirmed vulnerabilities, exploitability, minimal fixes, and CWE "
+        "identifiers only when confident.",
+        "Generation request — at most three brief assumptions, one complete implementation, "
+        "at most three verification checks; then stop\n"
+        "Review request — finding, severity/CWE when confident, exploitability, minimal fix, "
+        "verification\n"
+        "Do not emit review fields for a generation request unless they identify a concrete "
+        "risk in the supplied requirements.",
     ),
 }
 
