@@ -11,6 +11,7 @@ from cyberslm.config import settings
 from cyberslm.evaluation.compare import compare_reports, comparison_markdown, load_report
 from cyberslm.evaluation.importer import sync_source as sync_evaluation_source
 from cyberslm.evaluation.retrieval import evaluate_retrieval, finalize_report
+from cyberslm.evaluation.review import ReviewError, summarize_review, write_review_template
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.sources import SOURCES
 from cyberslm.knowledge import KnowledgeStore
@@ -53,6 +54,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--rag-results", type=int, default=settings.rag_results)
     run.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
 
+    review = subparsers.add_parser("review", help="Create or summarize a human-review worksheet")
+    review_subparsers = review.add_subparsers(dest="review_command", required=True)
+    review_init = review_subparsers.add_parser("init", help="Create a worksheet from a report")
+    review_init.add_argument("report", type=Path)
+    review_init.add_argument("--output", type=Path)
+    review_init.add_argument("--force", action="store_true")
+    review_summary = review_subparsers.add_parser(
+        "summarize", help="Validate and summarize a completed worksheet"
+    )
+    review_summary.add_argument("worksheet", type=Path)
+    review_summary.add_argument("--output", type=Path)
+
     compare = subparsers.add_parser("compare", help="Compare two saved evaluation reports")
     compare.add_argument("baseline", type=Path)
     compare.add_argument("candidate", type=Path)
@@ -80,6 +93,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         if len(cases) != count:
             raise SystemExit("Transformed evaluation dataset failed validation")
         print(f"Synced {count} cases from {source.name} at {source.version} to {output}")
+        return 0
+
+    if args.command == "review":
+        try:
+            if args.review_command == "init":
+                output = write_review_template(args.report, args.output, force=args.force)
+                print(f"Created human-review worksheet: {output}")
+                return 0
+            summary = summarize_review(args.worksheet)
+        except ReviewError as exc:
+            raise SystemExit(f"Human review error: {exc}") from exc
+        rendered = json.dumps(summary, indent=2) + "\n"
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+            print(f"Saved human-review summary: {args.output}")
+        else:
+            print(rendered, end="")
         return 0
 
     if args.command == "compare":

@@ -156,6 +156,11 @@ with the selected passages, generates a grounded response, and appends the exact
 references. It does not change or fine-tune the Gemma weights. If semantic vectors are missing
 or incomplete, retrieval safely falls back to FTS5 until `embed` finishes the resumable build.
 
+Today, enabling RAG makes the server attempt local retrieval for each message; CTF mode skips
+that attempt unless the prompt names an ATT&CK, CWE, or CAPEC reference, and an empty result
+adds no context. There is not yet a per-message `auto`/`on`/`off` control or a general relevance
+gate. Selective retrieval is tracked as the next roadmap improvement.
+
 There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
 provides factual context, evaluation datasets measure behavior, and private conversations are
 not training data. See [`docs/knowledge.md`](docs/knowledge.md) for the complete data map,
@@ -183,6 +188,14 @@ against the saved baseline with:
 
 ```bash
 uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate.json
+```
+
+Generate a private, source-hash-locked human-review worksheet with anchored correctness, task
+completion, operational-safety, and benchmark-label-quality fields:
+
+```bash
+uv run cyberslm-eval review init evals/results/candidate.json
+uv run cyberslm-eval review summarize evals/results/candidate-review.json
 ```
 
 Generated reports are private local artifacts and ignored by Git. See
@@ -253,14 +266,16 @@ Remaining work should proceed in this order:
 1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
    human scoring and independently sourced coverage for correctness, groundedness, refusal
    quality, prompt-injection resistance, and the other CyberSLM modes.
-2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
+2. **Make RAG selective:** add a relevance gate plus a per-message `auto`/`on`/`off` control,
+   while preserving exact-ID lookup and measuring both unnecessary and missed retrieval.
+3. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
-3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
+4. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
+5. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
    pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
    Windows without introducing a hosted-model dependency.
-5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
+6. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 

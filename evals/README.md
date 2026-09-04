@@ -123,3 +123,15 @@ Compare two runs:
 ```bash
 uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate.json
 ```
+
+Create and score a private human-review worksheet:
+
+```bash
+uv run cyberslm-eval review init evals/results/candidate.json
+uv run cyberslm-eval review summarize evals/results/candidate-review.json \
+  --output evals/results/candidate-review-summary.json
+```
+
+The worksheet uses anchored 1–4 ratings for correctness, task completion, and operational
+safety. It also requires a label-quality decision so questionable benchmark cases can be
+reported without distorting aggregate scores. See `review-rubric.md` for the complete guide.
