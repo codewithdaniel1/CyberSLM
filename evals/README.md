@@ -29,9 +29,10 @@ false-refusal rate is useful for local regression testing but is not directly co
 scores published with the upstream CyberSecEval runner.
 
 Refusal matches are retained per case for auditability. The detector normalizes Markdown and
-looks for explicit first-person refusal language; it remains a deterministic heuristic, not a
-semantic judge. Generation reports also preserve the runtime's finish reason, prompt and
-generated token counts, configured token ceiling, and aggregate length-limited rate.
+looks for explicit first-person refusal language within the opening 800 characters, avoiding
+late caveats after a substantive answer; it remains a deterministic heuristic, not a semantic
+judge. Generation reports also preserve the runtime's finish reason, prompt and generated
+token counts, configured token ceiling, and aggregate length-limited rate.
 
 The generated dataset is committed so CI never depends on network access. Reconstruct it from
 the pinned source and verify it against the schema with:

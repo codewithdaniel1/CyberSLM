@@ -74,7 +74,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MODEL_BACKEND` | `mlx` | `mlx` for Gemma or `mock` for testing |
 | `CYBERSLM_MODEL_ID` | `mlx-community/gemma-3-4b-it-4bit` | Hugging Face model ID or local path |
 | `CYBERSLM_ADAPTER_PATH` | empty | Optional evaluated LoRA adapter `.safetensors` path |
-| `CYBERSLM_MAX_TOKENS` | `768` | Maximum generated tokens |
+| `CYBERSLM_MAX_TOKENS` | `1024` | Maximum generated tokens |
 | `CYBERSLM_TEMPERATURE` | `0.2` | Generation randomness |
 | `CYBERSLM_MAX_UPLOAD_MB` | `10` | Per-image upload limit |
 | `CYBERSLM_API_PORT` | `8000` | Local API port |

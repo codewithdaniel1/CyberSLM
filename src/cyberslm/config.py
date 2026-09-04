@@ -47,7 +47,7 @@ class Settings:
         if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
         else None
     )
-    max_tokens: int = _int_env("CYBERSLM_MAX_TOKENS", 768)
+    max_tokens: int = _int_env("CYBERSLM_MAX_TOKENS", 1024)
     temperature: float = _float_env("CYBERSLM_TEMPERATURE", 0.2)
     api_url: str = os.getenv("CYBERSLM_API_URL", "http://127.0.0.1:8000")
     api_host: str = os.getenv("CYBERSLM_API_HOST", "127.0.0.1")
