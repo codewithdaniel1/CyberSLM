@@ -212,10 +212,12 @@ uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
 Reports include the complete responses, deterministic concept scores, category and mode summaries,
-latency, model configuration, environment metadata, and hashes of both the dataset and mode
-prompts. They also record auditable refusal phrase matches and authoritative runtime finish
-reasons so token-limit truncation is not inferred from prose. Compare a later candidate
-against the saved baseline with:
+latency, model configuration, environment metadata, and hashes of both the dataset and complete
+prompt contract (mode instructions plus the retrieved-background wrapper). They also record
+auditable refusal phrase matches and authoritative runtime finish reasons so token-limit
+truncation is not inferred from prose. Citation scoring examines only the generated answer body;
+the application-added source-disclosure footer does not count as an inline model citation.
+Compare a later candidate against the saved baseline with:
 
 Generation evaluation defaults to `--rag-policy auto`, matching chat. Use `--rag-policy on`
 to force retrieval for every case or `--rag-policy off` for a model-only control. Reports
@@ -237,7 +239,7 @@ uv run cyberslm-eval review summarize evals/results/candidate-review.json
 Generated reports are private local artifacts and ignored by Git. See
 [`evals/README.md`](evals/README.md) for the schema, limitations, and mock command.
 
-The current six-case synthetic suite verifies plumbing and basic concept coverage only. It is
+The six-case synthetic smoke suite verifies plumbing and basic concept coverage only. It is
 not large enough to establish model quality, production readiness, or superiority over another
 model.
 
@@ -322,7 +324,9 @@ Remaining work should proceed in this order:
    first model-only baseline and human review are complete. A prompt-hardening candidate shows
    a modest human-reviewed improvement. Auto-RAG now matches the product policy and retrieves
    the expected references exactly, but qualitative review shows that the model can over-apply
-   background material. Improve context use, then expand the Auto-routing slice with
+   background material. The evaluator now excludes the automatic source footer from citation
+   scoring, exposing that the current Gemma candidate does not reliably cite retrieved claims.
+   Improve grounded context use and attribution, then expand the Auto-routing slice with
    independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
@@ -335,9 +339,9 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: human-verify the Auto-RAG review draft, then improve
-how the model distinguishes reference background from case evidence before choosing another
-knowledge source.
+The immediate next milestone is item 1: human-review the stricter grounded-RAG candidate, then
+test narrower RAG abstention for insufficient-evidence and operational-validation requests
+before choosing another knowledge source.
 
 ## Authorization context
 
@@ -372,7 +376,7 @@ FastAPI :8000 ─── SQLite conversations
     │
     ├── ATT&CK/CWE/CAPEC ─── chunks ─── FTS5 + local embeddings
     ▼
-Model backend ─── retrieved citations ─── MLX-VLM ─── Gemma 3 4B (4-bit)
+Model backend ─── retrieved references ─── MLX-VLM ─── Gemma 3 4B (4-bit)
 ```
 
 The model backend is intentionally isolated so additional local runtimes can be added without

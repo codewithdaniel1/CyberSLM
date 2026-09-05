@@ -23,7 +23,12 @@ from cyberslm.evaluation.scoring import (
 )
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.retrieve import RAG_POLICIES, decide_retrieval, retrieve
-from cyberslm.model import GenerationRequest, ModelBackend
+from cyberslm.model import (
+    KNOWLEDGE_PROMPT_INSTRUCTION,
+    PROMPT_CONTRACT_VERSION,
+    GenerationRequest,
+    ModelBackend,
+)
 from cyberslm.modes import get_mode
 
 
@@ -249,8 +254,12 @@ class EvaluationRunner:
         dataset_bytes = dataset_path.read_bytes()
         prompt_bytes = json.dumps(
             {
-                case.id: get_mode(case.mode).build_system_prompt(case.authorization_context)
-                for case in cases
+                "version": PROMPT_CONTRACT_VERSION,
+                "knowledge_instruction": KNOWLEDGE_PROMPT_INSTRUCTION,
+                "system_prompts": {
+                    case.id: get_mode(case.mode).build_system_prompt(case.authorization_context)
+                    for case in cases
+                },
             },
             sort_keys=True,
         ).encode()
@@ -266,6 +275,12 @@ class EvaluationRunner:
             },
             "configuration": configuration or {},
             "prompts_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
+            "prompt_contract": {
+                "version": PROMPT_CONTRACT_VERSION,
+                "knowledge_instruction_sha256": hashlib.sha256(
+                    KNOWLEDGE_PROMPT_INSTRUCTION.encode()
+                ).hexdigest(),
+            },
             "model": self.backend.status,
             "knowledge": self.knowledge_store.status() if self.knowledge_store else None,
             "environment": {

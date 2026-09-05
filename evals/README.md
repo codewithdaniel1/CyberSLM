@@ -41,12 +41,21 @@ improve from 7/24 to 9/24 and mean correctness rises from 2.04 to 2.17, while me
 safety falls from 3.04 to 2.96.
 
 The matched Auto-RAG run searches 5/24 cases and uses references in all five. The four cases
-with expected references achieve 100% recall and precision, all generated citations cover the
-supplied references, safety behavior remains 24/24, and deterministic scoring improves to
-16/24 (66.7%). The AI-assisted qualitative draft scores 8/24, one below the model-only control,
-because the model sometimes treats relevant background material as incident-specific evidence.
-This draft requires human verification. The evidence favors better context use and answer
-grounding before adding more sources.
+with expected references achieve 100% recall and precision, safety behavior remains 24/24,
+and deterministic scoring improves to 16/24 (66.7%). The project owner accepted its
+AI-assisted qualitative review at 8/24, one below the model-only control, because the model
+sometimes treats relevant background material as incident-specific evidence.
+
+That run's apparent 100% citation coverage was a measurement defect: the scorer counted the
+numbered source-disclosure footer that CyberSLM appends after generation. Citation scoring now
+examines only the answer body. A stricter grounded-background candidate retained 100% retrieval
+recall and precision and 24/24 safety behavior, but scored 15/24 deterministically and produced
+no valid inline citations across the five RAG cases. Its prompt reduced one real-secret path
+probe to a synthetic canary, but Gemma still over-applied ATT&CK background and suggested
+destructive SQL examples. Treat this as a diagnosed model/context-use limitation, not a RAG
+quality win. Its AI-assisted qualitative draft passes 8/24, with means of 2.17 correctness,
+2.50 task completion, and 2.92 operational safety; it requires human verification before any
+adoption claim.
 
 ## External source
 
@@ -105,8 +114,10 @@ Each JSONL object contains:
 Expected concepts are transparent, deterministic plumbing checks. They do not measure
 factuality, reasoning quality, calibration, or whether advice is operationally safe.
 
-Each report records the dataset and CyberSLM mode-prompt hashes so comparisons reveal when
-either evaluation inputs or system instructions changed.
+Each report records the dataset hash and a hash of CyberSLM's complete prompt contract,
+including mode instructions and the retrieved-background wrapper. The contract version and
+knowledge-instruction hash are also stored explicitly so comparisons reveal incompatible
+prompt conditions.
 
 ## Commands
 
@@ -136,9 +147,10 @@ are regression coverage; independently reviewed prompts are still needed for a q
 
 Retrieval reports record recall, precision, exact-reference coverage, latency, retrieval method,
 embedding configuration, knowledge versions, and a report integrity hash. Generation reports
-also record expected-reference retrieval, citation coverage, and heuristic refusal behavior
-when the dataset supplies those expectations. Human review should back the safety heuristic
-before it is used for a release decision.
+also record expected-reference retrieval, inline answer-body citation coverage, and heuristic
+refusal behavior when the dataset supplies those expectations. The automatically appended
+source-disclosure footer is intentionally excluded from citation coverage. Human review should
+back the safety heuristic before it is used for a release decision.
 
 Run the local Gemma baseline deterministically:
 

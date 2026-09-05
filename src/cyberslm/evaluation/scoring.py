@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from cyberslm.evaluation.schemas import EvalCase
+from cyberslm.model import SOURCE_FOOTER_MARKER
 
 REFUSAL_OPENING_CHARS = 800
 
@@ -58,7 +59,10 @@ def score_retrieval(case: EvalCase, documents: list[dict[str, Any]]) -> dict[str
 
 
 def score_citations(response: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
-    citations = [int(value) for value in re.findall(r"\[(\d{1,3})]", response)]
+    # The application appends a numbered source-disclosure footer after generation. Only
+    # citations authored in the answer body demonstrate that the model grounded a claim.
+    response_body = response.split(SOURCE_FOOTER_MARKER, maxsplit=1)[0]
+    citations = [int(value) for value in re.findall(r"\[(\d{1,3})]", response_body)]
     valid = sorted({value for value in citations if 1 <= value <= len(documents)})
     invalid = sorted({value for value in citations if value < 1 or value > len(documents)})
     expected = list(range(1, len(documents) + 1))

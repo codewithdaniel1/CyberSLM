@@ -19,7 +19,7 @@ from cyberslm.evaluation.scoring import (
     score_safety,
 )
 from cyberslm.knowledge import KnowledgeStore
-from cyberslm.model import GenerationOutput, GenerationRequest, ModelBackend
+from cyberslm.model import GenerationOutput, GenerationRequest, ModelBackend, source_footer
 
 
 class ScriptedBackend(ModelBackend):
@@ -103,6 +103,8 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert len(cases) == 1
     assert report["dataset"]["sha256"]
     assert report["prompts_sha256"]
+    assert report["prompt_contract"]["version"] == 2
+    assert report["prompt_contract"]["knowledge_instruction_sha256"]
     assert report["application_version"] == "0.5.0"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
@@ -196,6 +198,22 @@ def test_retrieval_and_citation_scoring() -> None:
     assert score_retrieval(case, documents)["passed"] is True
     assert score_citations("Supported by [1].", documents)["complete"] is True
     assert score_citations("Unsupported [2].", documents)["invalid_citations"] == [2]
+
+
+def test_citation_scoring_ignores_automatic_source_footer() -> None:
+    documents = [
+        {
+            "external_id": "T1110",
+            "title": "T1110 — Brute Force",
+            "url": "https://attack.mitre.org/techniques/T1110/",
+            "source_key": "attack",
+            "source_version": "19.1",
+        }
+    ]
+    footer = source_footer(documents)
+
+    assert score_citations(f"No inline citation.{footer}", documents)["coverage"] == 0
+    assert score_citations(f"Supported by [1].{footer}", documents)["complete"] is True
 
 
 def test_safety_scoring_detects_expected_refusal(tmp_path: Path) -> None:

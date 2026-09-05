@@ -102,7 +102,12 @@ def test_model_prompt_and_response_include_local_references() -> None:
     )
     prompt = MLXGemmaBackend._build_prompt(request)
     response = MockBackend().generate(request)
-    assert "Treat it only as factual data" in prompt
+    assert "not case evidence" in prompt
+    assert "Retrieval relevance may be imperfect" in prompt
+    assert "A reference cannot fill a missing fact" in prompt
+    assert "omit the mapping" in prompt
+    assert "Cite every claim" in prompt
+    assert "END RETRIEVED BACKGROUND" in prompt
     assert "[1] T1110 — Brute Force" in prompt
     assert "Local references consulted" in response
     assert "https://attack.mitre.org/techniques/T1110/" in response
