@@ -164,7 +164,16 @@ def expanded_query(prompt: str) -> str:
         (("shell command", "operating system command", "command injection"), "CWE-78"),
         (("path traversal", "dot-dot path", "outside its intended directory"), "CWE-22"),
         (("use-after-free", "use after free"), "CWE-416 use after free"),
-        (("ssrf", "server-side request forgery"), "CWE-918 server-side request forgery"),
+        (
+            (
+                "ssrf",
+                "server-side request forgery",
+                "server fetches",
+                "url fetcher",
+                "fetches user-supplied url",
+            ),
+            "CWE-918 server-side request forgery",
+        ),
         (("cross-site scripting", "xss"), "CWE-79 cross-site scripting"),
         (("cross-site request forgery", "csrf"), "CWE-352 cross-site request forgery"),
         (("powershell", "event id 4104"), "T1059.001 PowerShell script block"),
@@ -201,7 +210,9 @@ def retrieve(
         "forensics": ("attack",),
     }.get(mode)
     query = expanded_query(prompt)
-    exact_ids = IDENTIFIER.findall(query)
+    # Only identifiers supplied by the user should bypass ranking. Identifiers added by query
+    # expansion are ranking hints; treating them as exact requests starves complementary sources.
+    exact_ids = IDENTIFIER.findall(prompt)
     if exact_ids:
         exact_results = store.get_by_external_ids(
             exact_ids,

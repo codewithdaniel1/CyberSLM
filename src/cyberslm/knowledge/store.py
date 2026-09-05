@@ -307,7 +307,7 @@ class KnowledgeStore:
                 row["external_id"].upper() not in exact_ids,
                 float(row["rank"]),
             ),
-        )[:limit]
+        )
         results = []
         seen_documents: set[str] = set()
         remaining = max_chars

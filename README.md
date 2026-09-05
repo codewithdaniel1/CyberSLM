@@ -279,9 +279,11 @@ The six-case synthetic smoke suite verifies plumbing and basic concept coverage 
 not large enough to establish model quality, production readiness, or superiority over another
 model.
 
-The separate 20-case synthetic retrieval benchmark currently measures 75% recall for
-lexical-only search and 80% for hybrid search at four results. These numbers validate the
-retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
+The separate 20-case synthetic retrieval benchmark currently measures 70% recall for
+lexical-only search and 75% for hybrid search at four unique documents. A fixed result-counting
+bug had previously hidden additional low-ranked documents and inflated the reported precision.
+These numbers validate the retrieval wiring and expose regressions; they are not a broad
+cybersecurity benchmark.
 
 The selective-RAG routing slice now contains 48 balanced cases: 24 should retrieve and 24
 should abstain. It includes explicit-reference overrides, source-family coverage,
@@ -377,9 +379,10 @@ Remaining work should proceed in this order:
    so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
    48 balanced cases, with all 18 new labels project-owner approved.
 2. **Expand vetted cyber coverage:** source discovery is complete for the current eight-source
-   shortlist. The pinned, opt-in OWASP Cheat Sheet parser is implemented; run its held-out A/B
-   benchmark before admission, then implement MITRE D3FEND and CISA KEV. Admit each only after
-   its held-out A/B benchmark shows incremental value.
+   shortlist. The pinned, opt-in OWASP Cheat Sheet parser is implemented and its pending-review
+   24-case retrieval slice improves both lexical and hybrid recall from 0/24 to 24/24. Review
+   those labels and test routing plus attribution before admission, then implement MITRE D3FEND
+   and CISA KEV. Admit each only after its held-out A/B benchmark shows incremental value.
    NVD, OSV, Sigma, EPSS, and NIST OSCAL are evaluated and intentionally deferred; see the
    [decision matrix](docs/knowledge-source-evaluation.md).
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -391,8 +394,8 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 2: run the OWASP pilot's incremental retrieval benchmark
-and review its routing and attribution results before enabling it.
+The immediate next milestone is item 2: approve or revise the OWASP retrieval labels, then test
+its chat routing and model attribution before enabling it.
 
 ## Authorization context
 

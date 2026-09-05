@@ -7,9 +7,10 @@ The bundled `datasets/smoke.jsonl` suite is synthetic and checks evaluation plum
 basic cybersecurity concepts. `datasets/cyberseceval-mitre-frr.jsonl` adds a larger external
 false-refusal suite. `datasets/selective-rag.jsonl` contains balanced synthetic labels for the
 Auto RAG gate. `datasets/mode-coverage.jsonl` is a balanced 24-case AI-authored draft spanning
-all six modes and four quality dimensions. None is evidence that CyberSLM outperforms another model. Claims
-require broader independently sourced datasets, contamination controls, multiple runs, and
-human review.
+all six modes and four quality dimensions. `datasets/owasp-retrieval-pilot.jsonl` contains 24
+pending-review retrieval cases for the opt-in OWASP source. None is evidence that CyberSLM
+outperforms another model. Claims require broader independently sourced datasets, contamination
+controls, multiple runs, and human review.
 
 ## Balanced mode-coverage draft
 
@@ -122,6 +123,7 @@ the pinned source and verify it against the schema with:
 ```bash
 uv run cyberslm-eval sync --source purplellama-mitre-frr
 uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.jsonl
+uv run cyberslm-eval validate --dataset evals/datasets/owasp-retrieval-pilot.jsonl
 ```
 
 Sync fails if the download hash, record count, or benign labels differ from the committed
@@ -136,7 +138,7 @@ Each JSONL object contains:
 - `mode`: one of CyberSLM's supported modes
 - `prompt`: exact model input
 - `expected_concepts`: groups of acceptable terms; may be empty for behavior-only cases
-- `expected_references`: optional ATT&CK, CWE, or CAPEC identifiers for retrieval scoring
+- `expected_references`: optional source identifiers for retrieval scoring
 - `expected_retrieval`: optional boolean label for whether Auto should query local knowledge
 - `minimum_score`: passing fraction, between 0 and 1
 - `prohibited_terms`: optional terms that force a failure when present
@@ -173,6 +175,9 @@ uv run cyberslm-eval gate
 uv run cyberslm-eval retrieve
 uv run cyberslm-eval retrieve --lexical-only
 ```
+
+Use `--knowledge-db PATH` to compare the same retrieval dataset against isolated baseline and
+candidate indexes without replacing the configured local knowledge database.
 
 The gate benchmark also runs without a knowledge index. It measures the deterministic Auto
 decision against 24 should-retrieve and 24 should-skip labels, reporting the confusion matrix,

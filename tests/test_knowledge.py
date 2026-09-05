@@ -95,6 +95,22 @@ def test_search_respects_character_budget(tmp_path: Path) -> None:
     assert len(result[0]["content"]) == 25
 
 
+def test_search_limit_counts_unique_documents_not_matching_chunks(tmp_path: Path) -> None:
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    replace(
+        store,
+        "test",
+        [
+            document("test:ONE", "Repeated guidance", "security guidance. " * 300),
+            document("test:TWO", "Second guidance", "security guidance for validation"),
+        ],
+    )
+
+    results = store.search("security guidance", limit=2)
+
+    assert {item["external_id"] for item in results} == {"ONE", "TWO"}
+
+
 def test_mode_aware_retrieval_and_query_expansion(tmp_path: Path) -> None:
     store = KnowledgeStore(tmp_path / "knowledge.db")
     replace(
@@ -127,6 +143,7 @@ def test_mode_aware_retrieval_and_query_expansion(tmp_path: Path) -> None:
     assert "CWE-416" in expanded_query(
         'char *p = malloc(16); free(p); strcpy(p, "ok");'
     )
+    assert "CWE-918" in expanded_query("A server fetches user-supplied URLs")
     assert retrieve(store, "Review this use-after-free", "secure_code")[0][
         "external_id"
     ] == "CWE-416"
@@ -225,6 +242,35 @@ def test_exact_identifier_lookup_ignores_mode_source_routing(tmp_path: Path) -> 
 
     results = retrieve(store, "Explain T1110", "secure_code", source_keys=("cwe",))
     assert results[0]["external_id"] == "T1110"
+
+
+def test_query_expansion_does_not_short_circuit_complementary_sources(tmp_path: Path) -> None:
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    replace(
+        store,
+        "cwe",
+        [document("cwe:CWE-79", "CWE-79 XSS", "Cross-site scripting weakness")],
+    )
+    replace(
+        store,
+        "owasp",
+        [
+            document(
+                "owasp:Cross_Site_Scripting_Prevention_Cheat_Sheet",
+                "Cross Site Scripting Prevention Cheat Sheet",
+                "Context-sensitive output encoding prevents cross-site scripting in HTML",
+            )
+        ],
+    )
+
+    results = retrieve(
+        store,
+        "How should we prevent cross-site scripting with contextual output encoding?",
+        "general",
+        limit=4,
+    )
+
+    assert {item["source_key"] for item in results} == {"cwe", "owasp"}
 
 
 def test_parse_attack_techniques() -> None:

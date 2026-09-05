@@ -197,6 +197,10 @@ def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
     assert parser.parse_args(["run", "--no-rag"]).rag_policy == "off"
     support_args = parser.parse_args(["support-review", "init", "report.json"])
     assert support_args.support_review_command == "init"
+    retrieval_args = parser.parse_args(
+        ["retrieve", "--knowledge-db", "/tmp/candidate-knowledge.db"]
+    )
+    assert retrieval_args.knowledge_db == Path("/tmp/candidate-knowledge.db")
 
 
 def test_scoring_alternatives_and_prohibited_terms() -> None:
@@ -451,6 +455,21 @@ def test_mode_coverage_dataset_is_balanced_and_human_approved() -> None:
         case.metadata["routing_review_status"] == "human-approved"
         for case in routing_cases
     )
+
+
+def test_owasp_pilot_dataset_is_complete_and_pending_review() -> None:
+    cases = load_dataset(Path("evals/datasets/owasp-retrieval-pilot.jsonl"))
+
+    assert len(cases) == 24
+    assert len({case.id for case in cases}) == 24
+    assert all(case.mode == "general" for case in cases)
+    assert all(
+        case.expected_references
+        and len(case.expected_references) == 1
+        and case.expected_references[0].startswith("OWASP-CS-")
+        for case in cases
+    )
+    assert all(case.metadata["review_status"] == "pending-human-review" for case in cases)
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:

@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     retrieval.add_argument("--dataset", type=Path, default=DEFAULT_RETRIEVAL_DATASET)
     retrieval.add_argument("--output", type=Path)
+    retrieval.add_argument(
+        "--knowledge-db",
+        type=Path,
+        default=settings.knowledge_database_path,
+        help="Knowledge database to evaluate (default: the configured local index)",
+    )
     retrieval.add_argument("--limit", type=int, default=settings.rag_results)
     retrieval.add_argument("--lexical-only", action="store_true")
 
@@ -185,7 +191,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "retrieve":
         cases = load_dataset(args.dataset)
-        store = KnowledgeStore(settings.knowledge_database_path)
+        store = KnowledgeStore(args.knowledge_db)
         if not store.status()["ready"]:
             raise SystemExit("Knowledge index is empty; run `cyberslm-knowledge sync` first")
         retrieval_embedder = None
