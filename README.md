@@ -133,6 +133,16 @@ Current sources:
 | Common Weakness Enumeration | 4.20 | 944 |
 | Common Attack Pattern Enumeration and Classification | 3.9 | 559 |
 
+The OWASP Cheat Sheet Series is implemented as an opt-in 24-document pilot pinned to commit
+`1eacf6cb9bfcba006ca972a804c5faace8c2758a`. It is deliberately excluded from normal sync,
+verification, background rebuilds, and chat routing until its incremental benchmark passes.
+Developers can build and verify the isolated pilot explicitly:
+
+```bash
+uv run cyberslm-knowledge sync --source owasp
+uv run cyberslm-knowledge verify --source owasp
+```
+
 Manage the local index with:
 
 ```bash
@@ -367,8 +377,9 @@ Remaining work should proceed in this order:
    so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
    48 balanced cases, with all 18 new labels project-owner approved.
 2. **Expand vetted cyber coverage:** source discovery is complete for the current eight-source
-   shortlist. Implement the approved pilots in order—OWASP Cheat Sheet Series, MITRE D3FEND,
-   then CISA KEV—and admit each only after its held-out A/B benchmark shows incremental value.
+   shortlist. The pinned, opt-in OWASP Cheat Sheet parser is implemented; run its held-out A/B
+   benchmark before admission, then implement MITRE D3FEND and CISA KEV. Admit each only after
+   its held-out A/B benchmark shows incremental value.
    NVD, OSV, Sigma, EPSS, and NIST OSCAL are evaluated and intentionally deferred; see the
    [decision matrix](docs/knowledge-source-evaluation.md).
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -380,8 +391,8 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 2: pilot the OWASP Cheat Sheet Series with pinned
-provenance, attribution, parser tests, and an incremental retrieval benchmark before enabling it.
+The immediate next milestone is item 2: run the OWASP pilot's incremental retrieval benchmark
+and review its routing and attribution results before enabling it.
 
 ## Authorization context
 

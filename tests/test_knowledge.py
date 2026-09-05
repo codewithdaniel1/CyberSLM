@@ -10,9 +10,16 @@ import pytest
 
 from cyberslm.knowledge.chunking import chunk_text
 from cyberslm.knowledge.embeddings import DEFAULT_EMBEDDING_MODEL
-from cyberslm.knowledge.ingest import parse_attack, parse_capec, parse_cwe, verify_payload
+from cyberslm.knowledge.ingest import (
+    MAX_OWASP_DOCUMENT_BYTES,
+    parse_attack,
+    parse_capec,
+    parse_cwe,
+    parse_owasp,
+    verify_payload,
+)
 from cyberslm.knowledge.retrieve import decide_retrieval, expanded_query, retrieve
-from cyberslm.knowledge.sources import KnowledgeSource
+from cyberslm.knowledge.sources import ALL_SOURCES, PILOT_SOURCES, SOURCES, KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 
 
@@ -27,6 +34,12 @@ class FakeEmbedder:
 def test_embedding_runtime_disables_telemetry() -> None:
     assert DEFAULT_EMBEDDING_MODEL
     assert os.environ["ORT_DISABLE_TELEMETRY"] == "1"
+
+
+def test_owasp_source_is_available_only_as_a_pilot() -> None:
+    assert "owasp" not in SOURCES
+    assert ALL_SOURCES["owasp"] is PILOT_SOURCES["owasp"]
+    assert PILOT_SOURCES["owasp"].document_count == 24
 
 
 def document(identifier: str, title: str, content: str) -> dict:
@@ -294,6 +307,67 @@ def test_parse_capec_archive() -> None:
     assert parsed[0]["external_id"] == "CAPEC-66"
     assert parsed[0]["metadata"]["related_weaknesses"] == ["CWE-89"]
 
+
+def test_parse_reviewed_owasp_cheat_sheets() -> None:
+    filenames = ("Authentication_Cheat_Sheet.md", "Input_Validation_Cheat_Sheet.md")
+    archive_bytes = BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr(
+            "snapshot/cheatsheets/Authentication_Cheat_Sheet.md",
+            "# Authentication Cheat Sheet\n\nUse generic error messages.\n",
+        )
+        archive.writestr(
+            "snapshot/cheatsheets/Input_Validation_Cheat_Sheet.md",
+            "# Input Validation Cheat Sheet\n\nUse an allowlist.\n",
+        )
+
+    parsed = list(parse_owasp(archive_bytes.getvalue(), filenames))
+
+    assert [item["title"] for item in parsed] == [
+        "Authentication Cheat Sheet",
+        "Input Validation Cheat Sheet",
+    ]
+    assert parsed[0]["external_id"] == "OWASP-CS-AUTHENTICATION-CHEAT-SHEET"
+    assert parsed[0]["metadata"]["license"] == "CC-BY-SA-4.0"
+    assert parsed[1]["url"].endswith("/Input_Validation_Cheat_Sheet.html")
+
+
+def test_parse_owasp_requires_every_reviewed_file() -> None:
+    archive_bytes = BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr(
+            "snapshot/cheatsheets/Authentication_Cheat_Sheet.md",
+            "# Authentication Cheat Sheet\n",
+        )
+    with pytest.raises(RuntimeError, match="Missing reviewed OWASP cheat sheets"):
+        list(
+            parse_owasp(
+                archive_bytes.getvalue(),
+                ("Authentication_Cheat_Sheet.md", "Input_Validation_Cheat_Sheet.md"),
+            )
+        )
+
+
+def test_parse_owasp_rejects_duplicate_and_oversized_members() -> None:
+    filename = "Authentication_Cheat_Sheet.md"
+    duplicate_archive = BytesIO()
+    with zipfile.ZipFile(duplicate_archive, "w") as archive:
+        archive.writestr(
+            f"snapshot-a/cheatsheets/{filename}", "# Authentication Cheat Sheet\n"
+        )
+        archive.writestr(
+            f"snapshot-b/cheatsheets/{filename}", "# Authentication Cheat Sheet\n"
+        )
+    with pytest.raises(RuntimeError, match="Duplicate OWASP cheat sheet"):
+        list(parse_owasp(duplicate_archive.getvalue(), (filename,)))
+
+    oversized_archive = BytesIO()
+    with zipfile.ZipFile(oversized_archive, "w") as archive:
+        archive.writestr(
+            f"snapshot/cheatsheets/{filename}", b"x" * (MAX_OWASP_DOCUMENT_BYTES + 1)
+        )
+    with pytest.raises(RuntimeError, match="exceeds size limit"):
+        list(parse_owasp(oversized_archive.getvalue(), (filename,)))
 
 def test_chunking_is_bounded_and_overlapping() -> None:
     chunks = chunk_text("alpha " * 300, max_chars=240, overlap_chars=30)

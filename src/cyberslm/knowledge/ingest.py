@@ -18,12 +18,62 @@ from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+MAX_OWASP_DOCUMENT_BYTES = 256 * 1024
+MAX_OWASP_TOTAL_BYTES = 2 * 1024 * 1024
+OWASP_CHEAT_SHEET_FILES = (
+    "Authentication_Cheat_Sheet.md",
+    "Authorization_Cheat_Sheet.md",
+    "Business_Logic_Security_Cheat_Sheet.md",
+    "Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md",
+    "Cross_Site_Scripting_Prevention_Cheat_Sheet.md",
+    "Cryptographic_Storage_Cheat_Sheet.md",
+    "Deserialization_Cheat_Sheet.md",
+    "Error_Handling_Cheat_Sheet.md",
+    "File_Upload_Cheat_Sheet.md",
+    "Forgot_Password_Cheat_Sheet.md",
+    "HTTP_Headers_Cheat_Sheet.md",
+    "Injection_Prevention_Cheat_Sheet.md",
+    "Input_Validation_Cheat_Sheet.md",
+    "JSON_Web_Token_Cheat_Sheet.md",
+    "Logging_Cheat_Sheet.md",
+    "OS_Command_Injection_Defense_Cheat_Sheet.md",
+    "Password_Storage_Cheat_Sheet.md",
+    "REST_Security_Cheat_Sheet.md",
+    "SQL_Injection_Prevention_Cheat_Sheet.md",
+    "Secrets_Management_Cheat_Sheet.md",
+    "Server_Side_Request_Forgery_Prevention_Cheat_Sheet.md",
+    "Session_Management_Cheat_Sheet.md",
+    "Transport_Layer_Security_Cheat_Sheet.md",
+    "XML_External_Entity_Prevention_Cheat_Sheet.md",
+)
 
 
 def clean_text(value: str) -> str:
     value = html.unescape(value)
     value = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", value).strip()
+
+
+def clean_markdown(value: str) -> str:
+    """Normalize trusted Markdown into readable, deterministic retrieval text."""
+    value = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+    value = re.sub(r"!\[([^]]*)]\([^)]*\)", r"\1", value)
+    value = re.sub(r"\[([^]]+)]\([^)]*\)", r"\1", value)
+    value = re.sub(r"^\[[^]]+]:\s+\S+.*$", "", value, flags=re.MULTILINE)
+    lines: list[str] = []
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if line.startswith("```") or line.startswith("~~~"):
+            continue
+        line = re.sub(r"^#{1,6}\s+", "", line)
+        line = re.sub(r"^>\s?", "", line)
+        line = re.sub(r"[*_~`]", "", line)
+        line = clean_text(line)
+        if line:
+            lines.append(line)
+        elif lines and lines[-1] != "":
+            lines.append("")
+    return "\n".join(lines).strip()
 
 
 def verify_payload(source: KnowledgeSource, payload: bytes) -> str:
@@ -204,7 +254,65 @@ def parse_capec(payload: bytes) -> Iterable[dict[str, Any]]:
         }
 
 
-PARSERS = {"attack": parse_attack, "cwe": parse_cwe, "capec": parse_capec}
+def parse_owasp(
+    payload: bytes,
+    filenames: tuple[str, ...] = OWASP_CHEAT_SHEET_FILES,
+) -> Iterable[dict[str, Any]]:
+    """Parse the reviewed OWASP pilot allowlist from a pinned repository archive."""
+    with zipfile.ZipFile(BytesIO(payload)) as archive:
+        members: dict[str, zipfile.ZipInfo] = {}
+        for info in archive.infolist():
+            matching = [
+                filename
+                for filename in filenames
+                if info.filename.endswith(f"/cheatsheets/{filename}")
+            ]
+            if not matching:
+                continue
+            filename = matching[0]
+            if filename in members:
+                raise RuntimeError(f"Duplicate OWASP cheat sheet in archive: {filename}")
+            if info.file_size > MAX_OWASP_DOCUMENT_BYTES:
+                raise RuntimeError(f"OWASP cheat sheet exceeds size limit: {filename}")
+            members[filename] = info
+
+        missing = sorted(set(filenames) - set(members))
+        if missing:
+            raise RuntimeError(f"Missing reviewed OWASP cheat sheets: {', '.join(missing)}")
+        if sum(info.file_size for info in members.values()) > MAX_OWASP_TOTAL_BYTES:
+            raise RuntimeError("Reviewed OWASP cheat sheets exceed the total size limit")
+
+        for filename in filenames:
+            raw_markdown = archive.read(members[filename]).decode("utf-8-sig")
+            heading = re.search(r"^#\s+(.+?)\s*$", raw_markdown, re.MULTILINE)
+            if not heading:
+                raise RuntimeError(f"OWASP cheat sheet has no title heading: {filename}")
+            title = clean_text(heading.group(1))
+            content = clean_markdown(raw_markdown)
+            if not content:
+                raise RuntimeError(f"OWASP cheat sheet has no usable content: {filename}")
+            slug = filename.removesuffix(".md")
+            external_id = f"OWASP-CS-{slug.replace('_', '-').upper()}"
+            yield {
+                "id": f"owasp:{slug}",
+                "external_id": external_id,
+                "title": title,
+                "url": f"https://cheatsheetseries.owasp.org/cheatsheets/{slug}.html",
+                "content": f"OWASP Cheat Sheet: {title}\n\n{content}",
+                "metadata": {
+                    "file": f"cheatsheets/{filename}",
+                    "license": "CC-BY-SA-4.0",
+                    "selection": "reviewed-secure-development-pilot",
+                },
+            }
+
+
+PARSERS = {
+    "attack": parse_attack,
+    "cwe": parse_cwe,
+    "capec": parse_capec,
+    "owasp": parse_owasp,
+}
 
 
 def sync_source(store: KnowledgeStore, source: KnowledgeSource, source_dir: Path) -> int:

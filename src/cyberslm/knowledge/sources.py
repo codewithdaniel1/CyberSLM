@@ -59,3 +59,27 @@ SOURCES: dict[str, KnowledgeSource] = {
         ),
     ),
 }
+
+
+PILOT_SOURCES: dict[str, KnowledgeSource] = {
+    "owasp": KnowledgeSource(
+        key="owasp",
+        name="OWASP Cheat Sheet Series",
+        version="1eacf6cb9bfcba006ca972a804c5faace8c2758a",
+        url=(
+            "https://github.com/OWASP/CheatSheetSeries/archive/"
+            "1eacf6cb9bfcba006ca972a804c5faace8c2758a.zip"
+        ),
+        filename="owasp-cheat-sheet-series-1eacf6c.zip",
+        sha256="8c6b69b738bbeb4dfe563042d211a15bdf561979e8e13333cb5d725bbaf2ad49",
+        document_count=24,
+        notice=(
+            "OWASP Cheat Sheet Series by OWASP and contributors, licensed under "
+            "CC BY-SA 4.0. Changes: 24 documents selected and Markdown normalized "
+            "for local indexing."
+        ),
+    ),
+}
+
+
+ALL_SOURCES: dict[str, KnowledgeSource] = {**SOURCES, **PILOT_SOURCES}

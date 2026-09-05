@@ -35,6 +35,19 @@ This downloads and indexes the pinned sources:
 - Common Weakness Enumeration 4.20
 - Common Attack Pattern Enumeration and Classification 3.9
 
+The normal command intentionally excludes sources that have not passed their admission
+benchmark. The first opt-in pilot is a reviewed 24-document subset of the OWASP Cheat Sheet
+Series. Developers can evaluate it without changing default chat routing:
+
+```bash
+uv run cyberslm-knowledge sync --source owasp
+uv run cyberslm-knowledge verify --source owasp
+```
+
+Its repository commit, archive hash, document allowlist, parser, and attribution notice are
+committed. Normal `sync` and `verify`, the in-app rebuild, and chat source routing continue to
+use only ATT&CK, CWE, and CAPEC until the pilot is admitted.
+
 Inspect the local store:
 
 ```bash

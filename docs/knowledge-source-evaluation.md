@@ -27,7 +27,7 @@ production index. `Defer` identifies the product condition that would make the s
 
 | Source | Decision | Best integration | Rationale and conditions |
 | --- | --- | --- | --- |
-| [OWASP Cheat Sheet Series](https://github.com/OWASP/CheatSheetSeries) | **Adopt first** | Curated, pinned prose RAG | Adds practical prevention and remediation guidance that CWE definitions do not provide. Import Markdown by document/section and retain title, canonical URL, revision, and attribution. The content is [CC-BY-SA-4.0](https://github.com/OWASP/CheatSheetSeries/blob/master/LICENSE.md); preserve its notice and attribution, and review share-alike handling before distributing derived content. |
+| [OWASP Cheat Sheet Series](https://github.com/OWASP/CheatSheetSeries) | **Pilot implemented; admission pending** | Curated, pinned prose RAG | Adds practical prevention and remediation guidance that CWE definitions do not provide. The opt-in pilot imports 24 allowlisted Markdown documents at commit `1eacf6cb9bfcba006ca972a804c5faace8c2758a`, retaining title, canonical URL, revision, and attribution. The content is [CC-BY-SA-4.0](https://github.com/OWASP/CheatSheetSeries/blob/master/LICENSE.md); preserve its notice and attribution, and review share-alike handling before distributing derived content. |
 | [MITRE D3FEND](https://github.com/d3fend/d3fend-ontology) | **Adopt second** | Pinned defensive-technique RAG | Adds defensive techniques, digital artifacts, and ATT&CK relationships. Import released ontology artifacts rather than scraping the website, and expose only concise technique definitions and relationships. The repository uses the [MIT license](https://github.com/d3fend/d3fend-ontology/blob/master/LICENSE.md) and also identifies D3FEND/ATT&CK trademark and terms notices that must be retained. |
 | [CISA Known Exploited Vulnerabilities](https://github.com/cisagov/kev-data) | **Adopt third** | Exact-CVE local lookup, then optional RAG context | Adds authoritative evidence that a CVE has been exploited in the wild. Use the official JSON/schema and route only exact CVE or vulnerability-prioritization questions. The official mirror is updated shortly after the canonical catalog and is [CC0-1.0](https://github.com/cisagov/kev-data/blob/develop/LICENSE). Label remediation due dates as federal civilian agency requirements rather than universal deadlines. |
 | [NVD](https://nvd.nist.gov/vuln/data-feeds) | **Defer bulk ingestion** | Future exact-CVE enrichment | The CVE/CPE APIs and feeds are useful, but a full semantic index would be large, fast-changing, and duplicative of KEV/OSV/CWE. Prefer a dated, on-demand lookup if the product later needs CVSS, CPE, or NVD enrichment. NIST information is generally public information, subject to the publisher's [copyright and data disclaimers](https://www.nist.gov/copyrights-disclaimers). |
@@ -38,8 +38,8 @@ production index. `Defer` identifies the product condition that would make the s
 
 ## Approved implementation order
 
-1. OWASP Cheat Sheet Series, because it most directly improves secure-code and remediation
-   answers with a manageable prose corpus.
+1. OWASP Cheat Sheet Series. Its pinned, opt-in parser pilot is implemented; the incremental
+   retrieval, routing, and attribution benchmark remains before admission.
 2. MITRE D3FEND, because it fills the defensive-countermeasure gap while connecting naturally
    to the existing ATT&CK source.
 3. CISA KEV, as an exact-CVE prioritization lookup instead of a corpus searched for every

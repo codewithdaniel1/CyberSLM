@@ -10,7 +10,7 @@ from cyberslm.config import settings
 from cyberslm.knowledge.embeddings import LocalEmbedder, rebuild_embeddings
 from cyberslm.knowledge.ingest import sync_source
 from cyberslm.knowledge.retrieve import retrieve
-from cyberslm.knowledge.sources import SOURCES
+from cyberslm.knowledge.sources import ALL_SOURCES, SOURCES
 from cyberslm.knowledge.store import KnowledgeStore
 from cyberslm.modes import MODES
 
@@ -24,13 +24,16 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     sync = subparsers.add_parser("sync", help="Download and index authoritative sources")
-    sync.add_argument("--source", action="append", choices=tuple(SOURCES), dest="sources")
+    sync.add_argument("--source", action="append", choices=tuple(ALL_SOURCES), dest="sources")
     sync.add_argument(
         "--no-embeddings", action="store_true", help="Skip rebuilding semantic embeddings"
     )
 
     subparsers.add_parser("status", help="Show indexed source versions and document counts")
-    subparsers.add_parser("verify", help="Verify local sources and index metadata")
+    verify = subparsers.add_parser("verify", help="Verify local sources and index metadata")
+    verify.add_argument(
+        "--source", action="append", choices=tuple(ALL_SOURCES), dest="sources"
+    )
     subparsers.add_parser("embed", help="Build local semantic embeddings for indexed passages")
 
     search = subparsers.add_parser("search", help="Search the local knowledge index")
@@ -50,7 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         selected = args.sources or list(SOURCES)
         source_dir = settings.knowledge_dir / "sources"
         for key in selected:
-            source = SOURCES[key]
+            source = ALL_SOURCES[key]
             print(f"Syncing {source.name} {source.version}...", flush=True)
             count = sync_source(store, source, source_dir)
             print(f"Indexed {count} documents from {source.name}.")
@@ -71,7 +74,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Documents: {status['document_count']}")
         print(f"Passages: {status['chunk_count']}")
         for source in status["sources"]:
-            expected = SOURCES.get(source["source_key"])
+            expected = ALL_SOURCES.get(source["source_key"])
             verified = bool(
                 expected
                 and source["version"] == expected.version
@@ -92,7 +95,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         indexed = {source["source_key"]: source for source in status["sources"]}
         source_dir = settings.knowledge_dir / "sources"
         valid = True
-        for key, expected in SOURCES.items():
+        selected = args.sources or list(SOURCES)
+        for key in selected:
+            expected = ALL_SOURCES[key]
             raw_path = source_dir / expected.filename
             record = indexed.get(key)
             raw_digest = ""
