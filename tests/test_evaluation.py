@@ -128,6 +128,8 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
         "complete_rate": 1,
         "mean_coverage": 1,
         "unmapped_valid_citations": 0,
+        "uncited_identifier_mentions": 0,
+        "unmentioned_references": 0,
     }
 
 
@@ -232,6 +234,7 @@ def test_citation_scoring_ignores_automatic_source_footer() -> None:
     footer = source_footer(documents)
     uncited_footer = source_footer(documents, "No inline citation.")
     cited_footer = source_footer(documents, "T1110 [1] describes brute force.")
+    mentioned_footer = source_footer(documents, "T1110 describes brute force.")
     unmapped_footer = source_footer(documents, "Investigate the domain [1].")
 
     assert score_citations(f"No inline citation.{footer}", documents)["coverage"] == 0
@@ -239,14 +242,32 @@ def test_citation_scoring_ignores_automatic_source_footer() -> None:
     assert "inline citations: 0/1; exact-ID citations: 0/1" in uncited_footer
     assert "inline citations: 1/1; exact-ID citations: 1/1" in cited_footer
     assert "inline citations: 1/1; exact-ID citations: 0/1" in unmapped_footer
+    assert "— not explicitly referenced" in uncited_footer
+    assert "— exact ID cited inline" in cited_footer
+    assert "— exact ID mentioned; citation not linked" in mentioned_footer
+    assert "— citation present; exact ID not linked" in unmapped_footer
     assert score_citations(f"No inline citation.{uncited_footer}", documents)["coverage"] == 0
 
     exact = score_attributions("T1110 [1] describes brute force.", documents)
+    mentioned = score_attributions("T1110 describes brute force.", documents)
     misplaced = score_attributions("Investigate the domain [1].", documents)
+    unreferenced = score_attributions("Investigate the domain.", documents)
     assert exact["complete"] is True
     assert exact["exact_id_citations"] == ["T1110"]
+    assert exact["reference_statuses"][0]["status"] == "exact_id_cited"
+    assert mentioned["uncited_identifier_mentions"] == ["T1110"]
+    assert (
+        mentioned["reference_statuses"][0]["status"]
+        == "exact_id_mentioned_citation_unlinked"
+    )
     assert misplaced["coverage"] == 0
     assert misplaced["unmapped_valid_citations"] == [1]
+    assert (
+        misplaced["reference_statuses"][0]["status"]
+        == "citation_present_identifier_unlinked"
+    )
+    assert unreferenced["unmentioned_references"] == ["T1110"]
+    assert unreferenced["reference_statuses"][0]["status"] == "not_explicitly_referenced"
 
 
 def test_safety_scoring_detects_expected_refusal(tmp_path: Path) -> None:

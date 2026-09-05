@@ -59,6 +59,29 @@ def inline_citation_numbers(response: str) -> set[int]:
     return {int(value) for value in re.findall(r"\[(\d{1,3})]", response_body)}
 
 
+def _external_id_pattern(external_id: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"(?<![A-Za-z0-9]){re.escape(external_id.strip())}(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )
+
+
+def mentioned_reference_numbers(
+    response: str,
+    documents: list[dict[str, Any]],
+) -> set[int]:
+    """Find retrieved-source identifiers explicitly mentioned in the answer body."""
+    response_body = response.split(SOURCE_FOOTER_MARKER, maxsplit=1)[0]
+    mentioned: set[int] = set()
+    for index, document in enumerate(documents, start=1):
+        external_id = document.get("external_id")
+        if not isinstance(external_id, str) or not external_id.strip():
+            continue
+        if _external_id_pattern(external_id).search(response_body):
+            mentioned.add(index)
+    return mentioned
+
+
 def exact_id_citation_numbers(
     response: str,
     documents: list[dict[str, Any]],
@@ -70,16 +93,49 @@ def exact_id_citation_numbers(
         external_id = document.get("external_id")
         if not isinstance(external_id, str) or not external_id.strip():
             continue
-        identifier = re.compile(
-            rf"(?<![A-Za-z0-9]){re.escape(external_id.strip())}(?![A-Za-z0-9])",
-            re.IGNORECASE,
-        )
+        identifier = _external_id_pattern(external_id)
         for line in response_body.splitlines():
             match = identifier.search(line)
             if match and re.search(rf"\[{index}]", line[match.end() :]):
                 mapped.add(index)
                 break
     return mapped
+
+
+def reference_attribution_statuses(
+    response: str,
+    documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Classify each retrieved source without changing the model-authored answer."""
+    citations = inline_citation_numbers(response)
+    mentioned = mentioned_reference_numbers(response, documents)
+    exact = exact_id_citation_numbers(response, documents)
+    statuses: list[dict[str, Any]] = []
+    for index, document in enumerate(documents, start=1):
+        if index in exact:
+            status = "exact_id_cited"
+        elif index in mentioned:
+            status = "exact_id_mentioned_citation_unlinked"
+        elif index in citations:
+            status = "citation_present_identifier_unlinked"
+        else:
+            status = "not_explicitly_referenced"
+        statuses.append(
+            {
+                "index": index,
+                "external_id": document.get("external_id"),
+                "status": status,
+            }
+        )
+    return statuses
+
+
+REFERENCE_STATUS_LABELS = {
+    "exact_id_cited": "exact ID cited inline",
+    "exact_id_mentioned_citation_unlinked": "exact ID mentioned; citation not linked",
+    "citation_present_identifier_unlinked": "citation present; exact ID not linked",
+    "not_explicitly_referenced": "not explicitly referenced",
+}
 
 
 def source_footer(
@@ -98,10 +154,20 @@ def source_footer(
             f"exact-ID citations: {exact}/{len(documents)}**"
         )
     lines = [f"{SOURCE_FOOTER_MARKER}{heading}"]
+    statuses = (
+        reference_attribution_statuses(response_text, documents)
+        if response_text is not None
+        else []
+    )
     for index, document in enumerate(documents, start=1):
+        status_label = (
+            f" — {REFERENCE_STATUS_LABELS[statuses[index - 1]['status']]}"
+            if statuses
+            else ""
+        )
         lines.append(
             f"[{index}] [{document['title']}]({document['url']}) "
-            f"— {document['source_key']} {document['source_version']}"
+            f"— {document['source_key']} {document['source_version']}{status_label}"
         )
     return "\n".join(lines)
 

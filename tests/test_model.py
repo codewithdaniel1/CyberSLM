@@ -110,4 +110,5 @@ def test_model_prompt_and_response_include_local_references() -> None:
     assert "END RETRIEVED BACKGROUND" in prompt
     assert "[1] T1110 — Brute Force" in prompt
     assert "inline citations: 0/1; exact-ID citations: 0/1" in response
+    assert "— not explicitly referenced" in response
     assert "https://attack.mitre.org/techniques/T1110/" in response

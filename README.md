@@ -219,7 +219,10 @@ truncation is not inferred from prose. Citation scoring examines only the genera
 the application-added source-disclosure footer does not count as an inline model citation.
 That footer shows both the number of inline citation markers and the number placed after their
 source's exact ATT&CK/CWE/CAPEC identifier, so retrieval is never presented as proof of
-grounded attribution. Exact-ID proximity is a structural check, not semantic entailment.
+grounded attribution. Each reference also carries a plain-language status showing whether its
+exact ID was cited, mentioned without a linked citation, cited without a linked identifier, or
+not explicitly referenced. These post-generation labels do not alter the model's answer.
+Exact-ID proximity is a structural check, not semantic entailment.
 Compare a later candidate against the saved baseline with:
 
 Generation evaluation defaults to `--rag-policy auto`, matching chat. Use `--rag-policy on`
@@ -334,8 +337,9 @@ Remaining work should proceed in this order:
    routing at 100%, and improves the human-approved AI-assisted review from 8/24 to 10/24. The
    evaluator excludes the automatic source footer from citation scoring and separately measures
    exact-ID attribution, exposing that Gemma still does not reliably cite retrieved claims.
-   Improve attribution, then expand the
-   Auto-routing slice with independently reviewed prompts.
+   Per-source attribution labels now expose the specific failure mode without rewriting the
+   answer. Next, measure a reviewed sentence-support verifier before considering optional
+   citation repair, then expand the Auto-routing slice with independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed

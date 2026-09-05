@@ -270,7 +270,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"Exact-ID attribution: {attributions['complete']}/{attributions['cases']} "
             f"complete | Coverage: {attributions['mean_coverage']:.1%} | "
-            f"Unmapped citations: {attributions['unmapped_valid_citations']}"
+            f"Unmapped citations: {attributions['unmapped_valid_citations']} | "
+            f"Uncited ID mentions: {attributions['uncited_identifier_mentions']} | "
+            f"Unmentioned refs: {attributions['unmentioned_references']}"
         )
     rag = report["summary"]["rag"]
     print(

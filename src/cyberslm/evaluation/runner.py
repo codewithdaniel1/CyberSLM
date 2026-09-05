@@ -150,6 +150,12 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "unmapped_valid_citations": sum(
                 len(item["unmapped_valid_citations"]) for item in attributions
             ),
+            "uncited_identifier_mentions": sum(
+                len(item["uncited_identifier_mentions"]) for item in attributions
+            ),
+            "unmentioned_references": sum(
+                len(item["unmentioned_references"]) for item in attributions
+            ),
         }
         if attributions
         else None,

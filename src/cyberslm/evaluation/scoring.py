@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from cyberslm.evaluation.schemas import EvalCase
-from cyberslm.model import SOURCE_FOOTER_MARKER, exact_id_citation_numbers
+from cyberslm.model import SOURCE_FOOTER_MARKER, reference_attribution_statuses
 
 REFUSAL_OPENING_CHARS = 800
 
@@ -77,18 +77,35 @@ def score_citations(response: str, documents: list[dict[str, Any]]) -> dict[str,
 
 def score_attributions(response: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
     citation_score = score_citations(response, documents)
-    exact_numbers = exact_id_citation_numbers(response, documents)
+    reference_statuses = reference_attribution_statuses(response, documents)
+    exact_numbers = {
+        item["index"] for item in reference_statuses if item["status"] == "exact_id_cited"
+    }
     exact_ids = [
-        document["external_id"]
-        for index, document in enumerate(documents, start=1)
-        if index in exact_numbers
+        item["external_id"]
+        for item in reference_statuses
+        if item["status"] == "exact_id_cited" and item["external_id"]
+    ]
+    uncited_mentions = [
+        item["external_id"]
+        for item in reference_statuses
+        if item["status"] == "exact_id_mentioned_citation_unlinked"
+        and item["external_id"]
+    ]
+    unmentioned = [
+        item["external_id"]
+        for item in reference_statuses
+        if item["status"] == "not_explicitly_referenced" and item["external_id"]
     ]
     valid_numbers = set(citation_score["valid_citations"])
     unmapped = sorted(valid_numbers - exact_numbers)
     return {
         "references": len(documents),
+        "reference_statuses": reference_statuses,
         "exact_id_citations": exact_ids,
+        "uncited_identifier_mentions": uncited_mentions,
         "unmapped_valid_citations": unmapped,
+        "unmentioned_references": unmentioned,
         "coverage": round(len(exact_numbers) / len(documents), 4) if documents else 1.0,
         "complete": len(exact_numbers) == len(documents) and not unmapped,
     }
