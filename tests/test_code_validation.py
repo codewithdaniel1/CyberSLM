@@ -99,11 +99,13 @@ def test_validation_footer_is_explicit_about_non_execution() -> None:
 def test_local_compiler_accepts_valid_c_and_rejects_invalid_c() -> None:
     if not any(shutil.which(name) for name in ("clang", "gcc", "cc")):
         pytest.skip("No local C compiler installed")
-    validator = CCodeValidator(timeout_seconds=10)
+    # Hosted CI runners can take longer to cold-start the compiler under load. This
+    # integration-test allowance does not change the application's four-second default.
+    validator = CCodeValidator(timeout_seconds=30)
 
     valid = validator.validate("```c\nint main(void) { return 0; }\n```", requested=True)
     invalid = validator.validate("```c\nint main(void) { return }\n```", requested=True)
 
-    assert valid["status"] in {"passed", "passed_with_warnings"}
+    assert valid["status"] in {"passed", "passed_with_warnings"}, valid
     assert invalid["status"] == "failed"
     assert invalid["blocks"][0]["diagnostics"]
