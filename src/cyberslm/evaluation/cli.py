@@ -15,6 +15,11 @@ from cyberslm.evaluation.review import ReviewError, summarize_review, write_revi
 from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.sources import SOURCES
+from cyberslm.evaluation.support import (
+    SupportReviewError,
+    summarize_support_review,
+    write_support_review_template,
+)
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.embeddings import LocalEmbedder
 from cyberslm.model import create_backend
@@ -87,6 +92,25 @@ def build_parser() -> argparse.ArgumentParser:
     review_summary.add_argument("worksheet", type=Path)
     review_summary.add_argument("--output", type=Path)
 
+    support_review = subparsers.add_parser(
+        "support-review",
+        help="Create or summarize a human review of source-linked claims",
+    )
+    support_subparsers = support_review.add_subparsers(
+        dest="support_review_command", required=True
+    )
+    support_init = support_subparsers.add_parser(
+        "init", help="Create a claim-support worksheet from a report"
+    )
+    support_init.add_argument("report", type=Path)
+    support_init.add_argument("--output", type=Path)
+    support_init.add_argument("--force", action="store_true")
+    support_summary = support_subparsers.add_parser(
+        "summarize", help="Validate and summarize a completed claim-support worksheet"
+    )
+    support_summary.add_argument("worksheet", type=Path)
+    support_summary.add_argument("--output", type=Path)
+
     compare = subparsers.add_parser("compare", help="Compare two saved evaluation reports")
     compare.add_argument("baseline", type=Path)
     compare.add_argument("candidate", type=Path)
@@ -130,6 +154,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(rendered, encoding="utf-8")
             print(f"Saved human-review summary: {args.output}")
+        else:
+            print(rendered, end="")
+        return 0
+
+    if args.command == "support-review":
+        try:
+            if args.support_review_command == "init":
+                output = write_support_review_template(
+                    args.report, args.output, force=args.force
+                )
+                print(f"Created claim-support worksheet: {output}")
+                return 0
+            summary = summarize_support_review(args.worksheet)
+        except SupportReviewError as exc:
+            raise SystemExit(f"Claim-support review error: {exc}") from exc
+        rendered = json.dumps(summary, indent=2) + "\n"
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+            print(f"Saved claim-support summary: {args.output}")
         else:
             print(rendered, end="")
         return 0
@@ -273,6 +317,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Unmapped citations: {attributions['unmapped_valid_citations']} | "
             f"Uncited ID mentions: {attributions['uncited_identifier_mentions']} | "
             f"Unmentioned refs: {attributions['unmentioned_references']}"
+        )
+    support_candidates = report["summary"]["support_candidates"]
+    if support_candidates:
+        print(
+            f"Claim-support candidates: {support_candidates['claims']} | "
+            f"References with claims: {support_candidates['references_with_claims']}/"
+            f"{support_candidates['references']} | "
+            f"Review-required cases: {support_candidates['review_required']}"
         )
     rag = report["summary"]["rag"]
     print(

@@ -22,6 +22,7 @@ from cyberslm.evaluation.scoring import (
     score_retrieval,
     score_safety,
 )
+from cyberslm.evaluation.support import collect_support_candidates
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.retrieve import RAG_POLICIES, decide_retrieval, retrieve
 from cyberslm.model import (
@@ -79,6 +80,7 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     retrieval = [item for item in retrieval if item is not None]
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
     attributions = [item["attribution_evaluation"] for item in results if item["knowledge"]]
+    support_candidates = [item["support_candidates"] for item in results if item["knowledge"]]
     safety = [item["safety_evaluation"] for item in results]
     safety = [item for item in safety if item is not None]
     answer_safely = [item for item in safety if item["expected_behavior"] == "answer_safely"]
@@ -158,6 +160,20 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             ),
         }
         if attributions
+        else None,
+        "support_candidates": {
+            "cases": len(support_candidates),
+            "references": sum(item["references"] for item in support_candidates),
+            "claims": sum(item["claim_count"] for item in support_candidates),
+            "references_with_claims": sum(
+                item["references_with_claims"] for item in support_candidates
+            ),
+            "references_without_claims": sum(
+                len(item["references_without_claims"]) for item in support_candidates
+            ),
+            "review_required": sum(item["review_required"] for item in support_candidates),
+        }
+        if support_candidates
         else None,
         "safety": {
             "cases": len(safety),
@@ -281,6 +297,11 @@ class EvaluationRunner:
                             "url": document["url"],
                             "source_key": document["source_key"],
                             "source_version": document["source_version"],
+                            "chunk_id": document.get("chunk_id"),
+                            "content": document["content"],
+                            "content_sha256": hashlib.sha256(
+                                document["content"].encode()
+                            ).hexdigest(),
                         }
                         for document in knowledge_documents
                     ],
@@ -295,6 +316,9 @@ class EvaluationRunner:
                     ),
                     "citation_evaluation": score_citations(response, knowledge_documents),
                     "attribution_evaluation": score_attributions(
+                        response, knowledge_documents
+                    ),
+                    "support_candidates": collect_support_candidates(
                         response, knowledge_documents
                     ),
                     "safety_evaluation": safety_evaluation,

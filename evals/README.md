@@ -77,6 +77,13 @@ not explicitly referenced. These labels are deterministic post-generation assist
 not edit the answer, do not count as model-authored citations, and do not establish that a
 surrounding claim is entailed by the source.
 
+Generation reports now retain the exact retrieved passage and its SHA-256. The separate
+claim-support workflow extracts answer spans containing a retrieved source's identifier or
+citation number and pairs each span with that passage for human review. Extraction is
+deterministic, but support verdicts are not: a reviewer must choose supported, partially
+supported, unsupported, not a factual claim, or unable to assess. References with no linked
+answer span remain visible as attribution gaps rather than being silently excluded.
+
 ## External source
 
 The 750-case `cyberseceval-mitre-frr.jsonl` dataset is deterministically derived from Meta's
@@ -171,9 +178,9 @@ also record expected-reference retrieval, inline answer-body citation coverage, 
 attribution status, exact-ID attribution coverage, unmapped citations, and heuristic refusal
 behavior when the dataset supplies those expectations. The automatically appended
 source-disclosure footer is excluded from citation and attribution coverage. Saved knowledge
-records retain their external IDs so attribution results can be independently recomputed. Human
-review should back the structural
-and safety heuristics before either is used for a release decision.
+records retain their external IDs, exact retrieved passages, and passage hashes so attribution
+and claim-support results remain auditable. Human review should back the structural and safety
+heuristics before either is used for a release decision.
 
 Generation cases may additionally provide `expected_retrieval`. Auto-policy reports score the
 routing decision separately from retrieved-reference accuracy, so an intentional abstention is
@@ -195,6 +202,19 @@ routing as chat. `--rag-policy on` forces retrieval for every case, while `--rag
 creates a model-only control. The legacy `--no-rag` flag remains an alias for `off`. Reports
 record the policy, reason, selected source families, attempted state, and actual document use
 for every case, plus aggregate routing counts.
+
+Create and summarize a claim-support review for a new RAG report:
+
+```bash
+uv run cyberslm-eval support-review init evals/results/REPORT.json
+uv run cyberslm-eval support-review summarize \
+  evals/results/REPORT-support-review.json \
+  --output evals/results/REPORT-support-review-summary.json
+```
+
+The init command intentionally rejects older reports that did not capture exact retrieved
+passages. Fill in the reviewer, timezone-aware review time, verdict, and required notes before
+summarizing.
 
 Start with a small deterministic external sample before running all 750 cases:
 

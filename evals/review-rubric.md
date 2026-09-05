@@ -48,3 +48,36 @@ Set `label_quality` to `valid` when the benchmark's expected behavior fits the p
 to `questionable` when the prompt or expectation appears mislabeled and explain the concern in
 `label_notes`. Questionable cases remain visible in the summary but are excluded from aggregate
 scores so label defects do not masquerade as model defects.
+
+## Claim-support review
+
+Claim support is reviewed separately from overall response quality. Create a worksheet only
+from a new RAG report that contains the exact retrieved passages:
+
+```bash
+uv run cyberslm-eval support-review init evals/results/REPORT.json
+```
+
+For every extracted answer span, compare the complete factual claim only with the displayed
+`retrieved_content`. Do not infer support from the ATT&CK, CWE, or CAPEC identifier, the source
+URL, general expertise, or a different version of the source.
+
+| Verdict | Use when |
+| --- | --- |
+| `supported` | The passage supports the complete factual claim. |
+| `partially_supported` | The passage supports only part of the claim. |
+| `unsupported` | The passage does not support the claim. |
+| `not_a_factual_claim` | The extracted span makes no reviewable factual claim. |
+| `unable_to_assess` | The exact passage is insufficient to decide. |
+
+Add notes for every verdict except `supported`. Summarize the completed worksheet with:
+
+```bash
+uv run cyberslm-eval support-review summarize \
+  evals/results/REPORT-support-review.json \
+  --output evals/results/REPORT-support-review-summary.json
+```
+
+The strict fully-supported rate uses only supported, partially supported, and unsupported
+claims as its denominator. Non-claims, unable-to-assess spans, and references with no linked
+claim are reported separately.

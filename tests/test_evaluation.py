@@ -110,6 +110,8 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["cases"][0]["knowledge"][0]["external_id"] == "T1110"
+    assert report["cases"][0]["knowledge"][0]["content"]
+    assert report["cases"][0]["knowledge"][0]["content_sha256"]
     assert report["cases"][0]["rag"]["reason"] == "source_relevant"
     assert report["summary"]["rag"] == {
         "cases": 1,
@@ -130,6 +132,14 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
         "unmapped_valid_citations": 0,
         "uncited_identifier_mentions": 0,
         "unmentioned_references": 0,
+    }
+    assert report["summary"]["support_candidates"] == {
+        "cases": 1,
+        "references": 1,
+        "claims": 1,
+        "references_with_claims": 1,
+        "references_without_claims": 0,
+        "review_required": 1,
     }
 
 
@@ -184,6 +194,8 @@ def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
     assert parser.parse_args(["run"]).rag_policy == "auto"
     assert parser.parse_args(["run", "--rag-policy", "on"]).rag_policy == "on"
     assert parser.parse_args(["run", "--no-rag"]).rag_policy == "off"
+    support_args = parser.parse_args(["support-review", "init", "report.json"])
+    assert support_args.support_review_command == "init"
 
 
 def test_scoring_alternatives_and_prohibited_terms() -> None:

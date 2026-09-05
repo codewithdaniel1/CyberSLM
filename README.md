@@ -23,6 +23,7 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Resumable semantic indexing with visible progress and pre-generation source previews
 - One-click background knowledge sync with hash verification and visible progress
 - Retrieval/citation/safety metrics, including a licensed 750-case false-refusal suite
+- Source-hash-locked human review for response quality and retrieved-claim support
 - Verified source manifests with expected SHA-256 hashes and document counts
 - GitHub Actions CI across Python 3.11-3.13 plus wheel/source-package validation
 - Tag-driven GitHub Releases with checksums and public-repository provenance attestations
@@ -242,6 +243,21 @@ uv run cyberslm-eval review init evals/results/candidate.json
 uv run cyberslm-eval review summarize evals/results/candidate-review.json
 ```
 
+For RAG runs, create a separate claim-support worksheet that pairs every source-linked answer
+span with the exact retrieved passage the model saw:
+
+```bash
+uv run cyberslm-eval support-review init evals/results/candidate.json
+uv run cyberslm-eval support-review summarize \
+  evals/results/candidate-support-review.json
+```
+
+The reviewer assigns `supported`, `partially_supported`, `unsupported`,
+`not_a_factual_claim`, or `unable_to_assess`. CyberSLM does not infer semantic support from
+token overlap, a framework identifier, or a citation marker. New generation reports preserve
+each retrieved passage and its SHA-256 so this review remains tied to the evidence actually
+provided to the model.
+
 Generated reports are private local artifacts and ignored by Git. See
 [`evals/README.md`](evals/README.md) for the schema, limitations, and mock command.
 
@@ -321,7 +337,8 @@ Completed through v0.5: passage chunking, local embeddings, hybrid vector/FTS5 r
 reciprocal-rank reranking, retrieval/citation/safety metrics, resumable indexing, source
 previews, CAPEC, CI/package builds, token streaming, cancellation, in-app verified knowledge
 sync, selective Auto/On/Off RAG, adapter loading, a reviewed-data LoRA workflow, verified
-private backups, opt-in non-executing C syntax validation, and tagged GitHub release automation.
+private backups, exact-passage claim-support review, opt-in non-executing C syntax validation,
+and tagged GitHub release automation.
 
 Remaining work should proceed in this order:
 
@@ -338,8 +355,9 @@ Remaining work should proceed in this order:
    evaluator excludes the automatic source footer from citation scoring and separately measures
    exact-ID attribution, exposing that Gemma still does not reliably cite retrieved claims.
    Per-source attribution labels now expose the specific failure mode without rewriting the
-   answer. Next, measure a reviewed sentence-support verifier before considering optional
-   citation repair, then expand the Auto-routing slice with independently reviewed prompts.
+   answer. The source-hash-locked claim-support workflow is now implemented; run and review its
+   first focused sample before considering optional citation repair, then expand the Auto-routing
+   slice with independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
