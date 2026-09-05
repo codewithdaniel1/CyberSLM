@@ -217,6 +217,23 @@ creates a model-only control. The legacy `--no-rag` flag remains an alias for `o
 record the policy, reason, selected source families, attempted state, and actual document use
 for every case, plus aggregate routing counts.
 
+Pilot sources can be evaluated without changing chat routing or the configured index. Build a
+candidate database separately, then opt in explicitly:
+
+```bash
+uv run cyberslm-eval gate \
+  --dataset evals/datasets/owasp-retrieval-pilot.jsonl \
+  --additional-source owasp
+uv run cyberslm-eval run \
+  --dataset evals/datasets/owasp-retrieval-pilot.jsonl \
+  --backend mlx --temperature 0 --rag-policy auto \
+  --knowledge-db /path/to/candidate-knowledge.db \
+  --additional-source owasp
+```
+
+`--additional-source` affects only that evaluation process. It does not add the pilot to normal
+knowledge syncs, background rebuilds, or application routing.
+
 Create and summarize a claim-support review for a new RAG report:
 
 ```bash

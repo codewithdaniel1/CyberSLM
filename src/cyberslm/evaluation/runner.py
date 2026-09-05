@@ -211,6 +211,7 @@ class EvaluationRunner:
         rag_max_chars: int = 16_000,
         embedder: Any | None = None,
         rag_policy: str = "auto",
+        additional_source_keys: tuple[str, ...] = (),
     ):
         self.backend = backend
         self.knowledge_store = knowledge_store
@@ -221,6 +222,7 @@ class EvaluationRunner:
         if normalized_policy not in RAG_POLICIES:
             raise ValueError("Knowledge policy must be one of: auto, on, off")
         self.rag_policy = normalized_policy
+        self.additional_source_keys = additional_source_keys
 
     def run(
         self,
@@ -239,6 +241,7 @@ class EvaluationRunner:
                 case.mode,
                 self.rag_policy,
                 enabled=self.knowledge_store is not None or self.rag_policy == "off",
+                additional_source_keys=self.additional_source_keys,
             )
             knowledge_documents = (
                 retrieve(

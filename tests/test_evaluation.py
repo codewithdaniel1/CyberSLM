@@ -201,6 +201,20 @@ def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
         ["retrieve", "--knowledge-db", "/tmp/candidate-knowledge.db"]
     )
     assert retrieval_args.knowledge_db == Path("/tmp/candidate-knowledge.db")
+    run_args = parser.parse_args(
+        [
+            "run",
+            "--knowledge-db",
+            "/tmp/candidate-knowledge.db",
+            "--additional-source",
+            "owasp",
+        ]
+    )
+    assert run_args.knowledge_db == Path("/tmp/candidate-knowledge.db")
+    assert run_args.additional_source == ["owasp"]
+    assert parser.parse_args(["gate", "--additional-source", "owasp"]).additional_source == [
+        "owasp"
+    ]
 
 
 def test_scoring_alternatives_and_prohibited_terms() -> None:
@@ -470,6 +484,22 @@ def test_owasp_pilot_dataset_is_complete_and_pending_review() -> None:
         for case in cases
     )
     assert all(case.metadata["review_status"] == "pending-human-review" for case in cases)
+    assert all(case.expected_retrieval is True for case in cases)
+
+
+def test_owasp_pilot_routing_can_be_evaluated_without_enabling_production() -> None:
+    dataset_path = Path("evals/datasets/owasp-retrieval-pilot.jsonl")
+    cases = load_dataset(dataset_path)
+
+    report = evaluate_rag_gate(
+        cases,
+        dataset_path=dataset_path,
+        additional_source_keys=("owasp",),
+    )
+
+    assert report["configuration"]["additional_source_keys"] == ["owasp"]
+    assert report["summary"]["recall"] == 1
+    assert all("owasp" in case["decision"]["source_keys"] for case in report["cases"])
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:

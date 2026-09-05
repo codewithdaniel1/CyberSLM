@@ -7,11 +7,10 @@ from typing import Protocol
 from cyberslm.knowledge.store import KnowledgeStore
 
 EXPLICIT_REFERENCE = re.compile(
-    r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?|ATT&CK|CWE|CAPEC)\b", re.IGNORECASE
+    r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?|ATT&CK|CWE|CAPEC|OWASP)\b",
+    re.IGNORECASE,
 )
-IDENTIFIER = re.compile(
-    r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE
-)
+IDENTIFIER = re.compile(r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
 ATTACK_SUBTECHNIQUE = re.compile(r"^(T\d{4})\.\d{3}$", re.IGNORECASE)
 RAG_POLICIES = frozenset({"auto", "on", "off"})
 
@@ -27,7 +26,8 @@ VALIDATION_SIGNAL = re.compile(
 )
 NON_MUTATING_VALIDATION_SIGNAL = re.compile(
     r"\b(?:without|do not|don't|must not|avoid)\b[^.]{0,100}"
-    r"\b(?:dumping|extracting|changing|modifying|accessing|deleting|writing|delays?)\b",
+    r"\b(?:dumping|extracting|changing (?:data|state|configuration)|modifying|"
+    r"accessing|deleting|writing|delays?)\b",
     re.IGNORECASE,
 )
 
@@ -67,6 +67,25 @@ SOURCE_SIGNALS = {
         r"(?:an?\s+)?(?:authorized\s+)?threat model\w*)\b",
         re.IGNORECASE,
     ),
+    "owasp": re.compile(
+        r"\b(?:authentication|login endpoint|account (?:enumeration|exists)|enumeration risk|"
+        r"authorization|access control|"
+        r"business logic|workflow|replay|cross-site request forgery|csrf|"
+        r"cross-site scripting|xss|cryptograph\w*|encryption keys?|ciphertext|"
+        r"deserializ\w*|stack traces?|error handling|file[- ]uploads?|image uploads?|"
+        r"account[- ]recovery|"
+        r"forgot password|password reset|reset tokens?|security headers?|http headers?|"
+        r"mime sniffing|clickjacking|injection|interpreters?|query syntax|input validation|"
+        r"syntactic|semantic validation|allowlist|"
+        r"json web token|jwt|security logging|password storage|password hash\w*|"
+        r"argon2|memory-hard|rest api|content types?|rate limiting|secrets? management|"
+        r"rotation|revocation|server-side request forgery|ssrf|session cookies?|"
+        r"session fixation|(?:transport layer security|tls) (?:server|configuration|protocol|"
+        r"version|cipher)|external entit\w*|xxe|"
+        r"xml pars\w*|shell command|sql text|database quer\w*|user-supplied urls?|"
+        r"outbound network)\b",
+        re.IGNORECASE,
+    ),
 }
 
 
@@ -94,13 +113,20 @@ def decide_retrieval(
     policy: str = "auto",
     *,
     enabled: bool = True,
+    additional_source_keys: tuple[str, ...] = (),
 ) -> RetrievalDecision:
     """Decide whether a chat turn should consult the local knowledge index."""
     normalized_policy = policy.strip().casefold()
     if normalized_policy not in RAG_POLICIES:
         raise ValueError("Knowledge policy must be one of: auto, on, off")
 
-    source_keys = MODE_SOURCES.get(mode, MODE_SOURCES["general"])
+    unknown_sources = set(additional_source_keys) - SOURCE_SIGNALS.keys()
+    if unknown_sources:
+        rendered = ", ".join(sorted(unknown_sources))
+        raise ValueError(f"Unknown additional knowledge source(s): {rendered}")
+    source_keys = tuple(
+        dict.fromkeys((*MODE_SOURCES.get(mode, MODE_SOURCES["general"]), *additional_source_keys))
+    )
     if not enabled:
         return RetrievalDecision(normalized_policy, False, "master_switch_off")
     if normalized_policy == "off":
@@ -123,15 +149,21 @@ def decide_retrieval(
             referenced_sources.add("cwe")
         if re.search(r"\bCAPEC\b", prompt, re.IGNORECASE):
             referenced_sources.add("capec")
+        if re.search(r"\bOWASP\b", prompt, re.IGNORECASE):
+            referenced_sources.add("owasp")
+        selectable_sources = tuple(
+            dict.fromkeys((*MODE_SOURCES["general"], *additional_source_keys))
+        )
         selected_sources = tuple(
-            source for source in MODE_SOURCES["general"] if source in referenced_sources
+            source for source in selectable_sources if source in referenced_sources
         )
-        return RetrievalDecision(
-            normalized_policy,
-            True,
-            "explicit_reference",
-            selected_sources or source_keys,
-        )
+        if selected_sources:
+            return RetrievalDecision(
+                normalized_policy,
+                True,
+                "explicit_reference",
+                selected_sources,
+            )
 
     # Retrieved examples can tempt a small model to fill stated evidence gaps. Bounded
     # validation requests also benefit more from the safety contract than extra attack examples.
@@ -223,9 +255,7 @@ def retrieve(
     query_vector = None
     if embedder is not None:
         status = store.status()
-        embedded_models = {
-            item["model"]: item["count"] for item in status["embedding_models"]
-        }
+        embedded_models = {item["model"]: item["count"] for item in status["embedding_models"]}
         if embedded_models.get(embedder.model_name, 0) == status["chunk_count"]:
             try:
                 query_vector = embedder.embed_query(query)

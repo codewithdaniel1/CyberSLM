@@ -2,7 +2,7 @@
 
 Status: **Pending project-owner review**
 
-Dataset SHA-256: `67a6bd741ce4d995872c535106e9a8324ff5e8151119598885be3e4f03f65255`
+Dataset SHA-256: `39367fd4020d5aa29b82a4544d2cb3bfd504f16e42be8f7463a6597015ee0793`
 
 This worksheet covers the 24 AI-authored cases in
 [`datasets/owasp-retrieval-pilot.jsonl`](datasets/owasp-retrieval-pilot.jsonl). Each case targets
@@ -14,6 +14,8 @@ The cases intentionally use General mode so the benchmark can search the tempora
 alongside all three admitted sources without changing production routing. The evaluation expects
 one primary OWASP document but retrieves four potentially complementary results, so 25% precision
 is the maximum possible under this single-reference labeling when all four slots are populated.
+Each case also has a provisional `expected_retrieval: true` label so the pilot router can be
+measured. These labels remain AI-authored and pending project-owner review.
 
 ## Proposed labels
 
@@ -58,11 +60,41 @@ the configured live database was not modified.
 | Hybrid mean precision | 0% | 25% | +25 points |
 
 Candidate hybrid report SHA-256:
-`b22452e64ec1b7e8c39187dd56bfa9aed88fbe2b81646606288dc4f501c16102`.
+`b33dc82529083a89086a4244a493edfc550cac0d9e4dfe155fc92bdec042a0cf`.
 
 This proves that the candidate index can retrieve the intended documents for this synthetic
 source-specific slice. It does not establish answer quality, independent real-world retrieval
 quality, safe context use, or model-authored attribution.
+
+## Provisional routing result
+
+The evaluation-only `--additional-source owasp` switch routed all 24/24 source-specific cases
+to OWASP. With the same switch, the existing balanced and human-approved 48-case routing suite
+also remained at 48/48: 24 true positives, 24 true negatives, and no false positives or false
+negatives. Without that explicit switch, normal chat and evaluation routing continue to use only
+ATT&CK, CWE, and CAPEC.
+
+- OWASP routing report SHA-256:
+  `9233eaa7a01fded20da1f2187c41a9373d30c2369078000b442c717b865d85af`
+- Balanced routing report SHA-256:
+  `f78f0518de6743ad498a0b75ce1cb11dd62f0e751a2c771aaaf250deb2c48420`
+
+## Initial model-use sample
+
+A deterministic six-case Gemma sample used the isolated candidate index and the application's
+default four-result limit. It retrieved the expected OWASP document in 6/6 cases, passed the
+transparent concept checks in 5/6, and routed all 6/6 cases correctly. Only 1/6 responses cited
+every retrieved reference, with 41.7% mean inline-citation coverage. The source-linked claim
+extractor produced 15 candidates across five responses; they still require human support review.
+
+At a one-result limit, only 2/6 intended OWASP documents ranked first and no response used an
+inline citation. This confirms that the four-result depth is currently necessary for the pilot.
+The exact-ID attribution score is not suitable for OWASP prose because its `OWASP-CS-*` identifiers
+are internal dataset keys rather than public identifiers shown to the model; inline citation and
+human claim-support review remain the relevant checks.
+
+These six cases are a diagnostic sample, not an admission result. The weak citation consistency,
+pending support review, and pending dataset-label review keep OWASP out of production routing.
 
 ## Review decision
 

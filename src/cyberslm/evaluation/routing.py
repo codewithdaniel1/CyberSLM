@@ -18,6 +18,7 @@ def evaluate_rag_gate(
     cases: list[EvalCase],
     *,
     dataset_path: Path,
+    additional_source_keys: tuple[str, ...] = (),
     progress: Callable[[int, int, EvalCase], None] | None = None,
 ) -> dict[str, Any]:
     """Evaluate Auto RAG routing without querying the index or running a model."""
@@ -29,7 +30,12 @@ def evaluate_rag_gate(
             raise ValueError(f"RAG gate case {case.id!r} has no expected_retrieval label")
 
         started = time.perf_counter()
-        decision = decide_retrieval(case.prompt, case.mode, "auto")
+        decision = decide_retrieval(
+            case.prompt,
+            case.mode,
+            "auto",
+            additional_source_keys=additional_source_keys,
+        )
         latency = time.perf_counter() - started
         results.append(
             {
@@ -78,7 +84,11 @@ def evaluate_rag_gate(
             "sha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest(),
             "cases": len(cases),
         },
-        "configuration": {"policy": "auto", "requires_knowledge_index": False},
+        "configuration": {
+            "policy": "auto",
+            "requires_knowledge_index": False,
+            "additional_source_keys": list(additional_source_keys),
+        },
         "summary": {
             "cases": len(results),
             "passed": true_positive + true_negative,

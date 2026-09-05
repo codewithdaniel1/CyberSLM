@@ -22,6 +22,7 @@ from cyberslm.evaluation.support import (
 )
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.embeddings import LocalEmbedder
+from cyberslm.knowledge.sources import PILOT_SOURCES
 from cyberslm.model import create_backend
 
 DEFAULT_DATASET = Path("evals/datasets/smoke.jsonl")
@@ -61,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gate.add_argument("--dataset", type=Path, default=DEFAULT_RAG_GATE_DATASET)
     gate.add_argument("--output", type=Path)
+    gate.add_argument(
+        "--additional-source",
+        action="append",
+        choices=tuple(PILOT_SOURCES),
+        default=[],
+        help="Include an opt-in pilot source in routing (repeatable)",
+    )
 
     run = subparsers.add_parser("run", help="Run a model against an evaluation dataset")
     run.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
@@ -84,6 +92,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Deprecated alias for --rag-policy off",
     )
     run.add_argument("--rag-results", type=int, default=settings.rag_results)
+    run.add_argument(
+        "--knowledge-db",
+        type=Path,
+        default=settings.knowledge_database_path,
+        help="Knowledge database to evaluate (default: the configured local index)",
+    )
+    run.add_argument(
+        "--additional-source",
+        action="append",
+        choices=tuple(PILOT_SOURCES),
+        default=[],
+        help="Include an opt-in pilot source in Auto RAG routing (repeatable)",
+    )
     run.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
 
     review = subparsers.add_parser("review", help="Create or summarize a human-review worksheet")
@@ -231,6 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             evaluate_rag_gate(
                 cases,
                 dataset_path=args.dataset,
+                additional_source_keys=tuple(args.additional_source),
                 progress=lambda index, total, case: print(
                     f"[{index}/{total}] {case.id} ({case.mode})", flush=True
                 ),
@@ -263,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     knowledge_store = None
     embedder = None
     if args.rag_policy != "off":
-        candidate_store = KnowledgeStore(settings.knowledge_database_path)
+        candidate_store = KnowledgeStore(args.knowledge_db)
         if candidate_store.status()["ready"]:
             knowledge_store = candidate_store
             if settings.rag_semantic_enabled:
@@ -279,6 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         rag_max_chars=settings.rag_max_chars,
         embedder=embedder,
         rag_policy=args.rag_policy,
+        additional_source_keys=tuple(args.additional_source),
     ).run(
         cases,
         dataset_path=args.dataset,
@@ -291,6 +314,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "rag_enabled": knowledge_store is not None,
             "rag_policy": args.rag_policy,
             "rag_results": args.rag_results,
+            "knowledge_database_path": str(args.knowledge_db),
+            "additional_source_keys": list(args.additional_source),
             "rag_semantic_enabled": embedder is not None,
             "rag_embedding_model": embedder.model_name if embedder else None,
         },

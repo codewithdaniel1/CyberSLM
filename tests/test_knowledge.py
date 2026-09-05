@@ -232,6 +232,29 @@ def test_selective_retrieval_policy() -> None:
         decide_retrieval("Hello", "general", "sometimes")
 
 
+def test_pilot_sources_are_opt_in_for_retrieval_policy() -> None:
+    prompt = "How should an API validate a JWT issuer and audience?"
+
+    production = decide_retrieval(prompt, "general")
+    pilot = decide_retrieval(prompt, "general", additional_source_keys=("owasp",))
+    explicit_pilot = decide_retrieval(
+        "Use the OWASP guidance for password storage.",
+        "general",
+        additional_source_keys=("owasp",),
+    )
+
+    assert not production.should_retrieve
+    assert "owasp" not in production.source_keys
+    assert pilot.should_retrieve
+    assert pilot.reason == "source_relevant"
+    assert pilot.source_keys == ("owasp",)
+    assert explicit_pilot.reason == "explicit_reference"
+    assert explicit_pilot.source_keys == ("owasp",)
+
+    with pytest.raises(ValueError, match="Unknown additional knowledge source"):
+        decide_retrieval(prompt, "general", additional_source_keys=("unknown",))
+
+
 def test_exact_identifier_lookup_ignores_mode_source_routing(tmp_path: Path) -> None:
     store = KnowledgeStore(tmp_path / "knowledge.db")
     replace(
