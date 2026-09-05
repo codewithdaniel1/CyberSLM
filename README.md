@@ -355,9 +355,10 @@ Remaining work should proceed in this order:
    evaluator excludes the automatic source footer from citation scoring and separately measures
    exact-ID attribution, exposing that Gemma still does not reliably cite retrieved claims.
    Per-source attribution labels now expose the specific failure mode without rewriting the
-   answer. The source-hash-locked claim-support workflow is now implemented; run and review its
-   first focused sample before considering optional citation repair, then expand the Auto-routing
-   slice with independently reviewed prompts.
+   answer. The source-hash-locked claim-support workflow and first focused review are complete:
+   both extracted mappings were only partially supported and one retrieved source was unlinked,
+   so automatic citation repair is not justified. Next, expand the Auto-routing slice with
+   independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed

@@ -84,6 +84,13 @@ deterministic, but support verdicts are not: a reviewer must choose supported, p
 supported, unsupported, not a factual claim, or unable to assess. References with no linked
 answer span remain visible as attribution gaps rather than being silently excluded.
 
+The first six-case claim-support run preserved three exact retrieved passages and extracted two
+source-linked mapping spans. The project owner approved the AI-assisted review: both spans are
+only partially supported because the passages define the ATT&CK/CWE taxonomy but do not, by
+themselves, establish the case-specific mapping. The CWE-22 passage had no linked answer span.
+The strict fully-supported rate is therefore 0/2; this tiny diagnostic sample is not a general
+groundedness score. It does not justify automatic citation repair.
+
 ## External source
 
 The 750-case `cyberseceval-mitre-frr.jsonl` dataset is deterministically derived from Meta's
