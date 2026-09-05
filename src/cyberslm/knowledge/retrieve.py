@@ -7,13 +7,29 @@ from typing import Protocol
 from cyberslm.knowledge.store import KnowledgeStore
 
 EXPLICIT_REFERENCE = re.compile(
-    r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?|ATT&CK|CAPEC)\b", re.IGNORECASE
+    r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?|ATT&CK|CWE|CAPEC)\b", re.IGNORECASE
 )
 IDENTIFIER = re.compile(
     r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE
 )
 ATTACK_SUBTECHNIQUE = re.compile(r"^(T\d{4})\.\d{3}$", re.IGNORECASE)
 RAG_POLICIES = frozenset({"auto", "on", "off"})
+
+EVIDENCE_GAP_SIGNAL = re.compile(
+    r"\b(?:no|without|missing|lacks?|not provided|not shown)\b[^.]{0,240}"
+    r"\b(?:evidence|telemetry|logs?|requests?|responses?|versions?|reproduction|hosts?|"
+    r"users?|timestamps?|destinations?|volumes?|detection logic|configurations?)\b",
+    re.IGNORECASE,
+)
+VALIDATION_SIGNAL = re.compile(
+    r"\b(?:verify|verification|validate|validation|test|testing|reproduce|proof of concept|poc)\b",
+    re.IGNORECASE,
+)
+NON_MUTATING_VALIDATION_SIGNAL = re.compile(
+    r"\b(?:without|do not|don't|must not|avoid)\b[^.]{0,100}"
+    r"\b(?:dumping|extracting|changing|modifying|accessing|deleting|writing|delays?)\b",
+    re.IGNORECASE,
+)
 
 MODE_SOURCES = {
     "general": ("attack", "cwe", "capec"),
@@ -103,6 +119,8 @@ def decide_retrieval(
                 referenced_sources.add("capec")
         if re.search(r"\bATT&CK\b", prompt, re.IGNORECASE):
             referenced_sources.add("attack")
+        if re.search(r"\bCWE\b", prompt, re.IGNORECASE):
+            referenced_sources.add("cwe")
         if re.search(r"\bCAPEC\b", prompt, re.IGNORECASE):
             referenced_sources.add("capec")
         selected_sources = tuple(
@@ -114,6 +132,14 @@ def decide_retrieval(
             "explicit_reference",
             selected_sources or source_keys,
         )
+
+    # Retrieved examples can tempt a small model to fill stated evidence gaps. Bounded
+    # validation requests also benefit more from the safety contract than extra attack examples.
+    # Exact IDs or explicit ATT&CK/CWE/CAPEC requests above still override these abstentions.
+    if EVIDENCE_GAP_SIGNAL.search(prompt):
+        return RetrievalDecision(normalized_policy, False, "insufficient_evidence", source_keys)
+    if VALIDATION_SIGNAL.search(prompt) and NON_MUTATING_VALIDATION_SIGNAL.search(prompt):
+        return RetrievalDecision(normalized_policy, False, "operational_validation", source_keys)
 
     matched_sources = tuple(
         source for source in source_keys if SOURCE_SIGNALS[source].search(prompt)

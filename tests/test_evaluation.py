@@ -132,6 +132,8 @@ def test_generation_evaluation_uses_selective_rag_policy(tmp_path: Path) -> None
                 "mode": "general",
                 "prompt": "Thanks, that answers my question.",
                 "expected_concepts": [["brute force"]],
+                "expected_references": ["T1110"],
+                "expected_retrieval": False,
             }
         )
         + "\n"
@@ -153,7 +155,15 @@ def test_generation_evaluation_uses_selective_rag_policy(tmp_path: Path) -> None
         "source_keys": ["attack", "cwe", "capec"],
         "document_count": 0,
     }
+    assert automatic["cases"][0]["rag_evaluation"]["passed"] is True
+    assert automatic["cases"][0]["retrieval_evaluation"] is None
+    assert automatic["summary"]["rag_routing"] == {
+        "cases": 1,
+        "passed": 1,
+        "accuracy": 1,
+    }
     assert disabled["cases"][0]["rag"]["reason"] == "disabled_for_message"
+    assert disabled["cases"][0]["rag_evaluation"] is None
     assert disabled["cases"][0]["retrieval_evaluation"] is None
 
 
@@ -321,15 +331,15 @@ def test_selective_rag_dataset_has_no_gate_errors() -> None:
 
     report = evaluate_rag_gate(cases, dataset_path=dataset_path)
 
-    assert report["summary"]["cases"] == 24
+    assert report["summary"]["cases"] == 30
     assert report["summary"]["accuracy"] == 1
     assert report["summary"]["precision"] == 1
     assert report["summary"]["recall"] == 1
     assert report["summary"]["false_positive_rate"] == 0
     assert report["summary"]["false_negative_rate"] == 0
     assert report["summary"]["confusion_matrix"] == {
-        "true_positive": 12,
-        "true_negative": 12,
+        "true_positive": 16,
+        "true_negative": 14,
         "false_positive": 0,
         "false_negative": 0,
     }
@@ -354,6 +364,13 @@ def test_mode_coverage_dataset_is_balanced_and_human_approved() -> None:
         "safety-boundary": 6,
     }
     assert all(case.metadata["review_status"] == "human-approved" for case in cases)
+    routing_cases = [case for case in cases if case.expected_retrieval is not None]
+    assert len(routing_cases) == 5
+    assert Counter(case.expected_retrieval for case in routing_cases) == {True: 3, False: 2}
+    assert all(
+        case.metadata["routing_review_status"] == "pending-human-review"
+        for case in routing_cases
+    )
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:

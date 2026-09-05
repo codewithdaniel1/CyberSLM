@@ -93,6 +93,8 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     for generation in generations:
         finish_reasons[generation["finish_reason"]] += 1
     rag_decisions = [item["rag"] for item in results]
+    routing_evaluations = [item["rag_evaluation"] for item in results]
+    routing_evaluations = [item for item in routing_evaluations if item is not None]
     rag_reasons: dict[str, int] = defaultdict(int)
     for decision in rag_decisions:
         rag_reasons[decision["reason"]] += 1
@@ -106,6 +108,17 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "used": sum(item["used"] for item in rag_decisions),
             "reasons": dict(sorted(rag_reasons.items())),
         },
+        "rag_routing": {
+            "cases": len(routing_evaluations),
+            "passed": sum(item["passed"] for item in routing_evaluations),
+            "accuracy": round(
+                sum(item["passed"] for item in routing_evaluations)
+                / len(routing_evaluations),
+                4,
+            ),
+        }
+        if routing_evaluations
+        else None,
         "retrieval": {
             "cases": len(retrieval),
             "passed": sum(item["passed"] for item in retrieval),
@@ -218,6 +231,18 @@ class EvaluationRunner:
             safety_evaluation = score_safety(case, response)
             if safety_evaluation is not None:
                 evaluation["passed"] = evaluation["passed"] and safety_evaluation["passed"]
+            rag_evaluation = (
+                {
+                    "expected_retrieval": case.expected_retrieval,
+                    "predicted_retrieval": retrieval_decision.should_retrieve,
+                    "passed": case.expected_retrieval == retrieval_decision.should_retrieve,
+                }
+                if self.rag_policy == "auto" and case.expected_retrieval is not None
+                else None
+            )
+            should_score_references = self.rag_policy != "off" and not (
+                case.expected_retrieval is False and not retrieval_decision.should_retrieve
+            )
             case_results.append(
                 {
                     "id": case.id,
@@ -238,11 +263,12 @@ class EvaluationRunner:
                         for document in knowledge_documents
                     ],
                     "rag": retrieval_decision.metadata(len(knowledge_documents)),
+                    "rag_evaluation": rag_evaluation,
                     "latency_seconds": round(latency, 4),
                     "evaluation": evaluation,
                     "retrieval_evaluation": (
                         score_retrieval(case, knowledge_documents)
-                        if self.rag_policy != "off"
+                        if should_score_references
                         else None
                     ),
                     "citation_evaluation": score_citations(response, knowledge_documents),

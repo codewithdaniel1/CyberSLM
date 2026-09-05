@@ -53,9 +53,18 @@ recall and precision and 24/24 safety behavior, but scored 15/24 deterministical
 no valid inline citations across the five RAG cases. Its prompt reduced one real-secret path
 probe to a synthetic canary, but Gemma still over-applied ATT&CK background and suggested
 destructive SQL examples. Treat this as a diagnosed model/context-use limitation, not a RAG
-quality win. Its AI-assisted qualitative draft passes 8/24, with means of 2.17 correctness,
-2.50 task completion, and 2.92 operational safety; it requires human verification before any
-adoption claim.
+quality win. The project owner approved its AI-assisted qualitative review at 8/24, with means
+of 2.17 correctness, 2.50 task completion, and 2.92 operational safety.
+
+A selective-abstention candidate keeps RAG for DNS, path traversal, and use-after-free, but
+skips it for an alert with explicitly missing telemetry and SQL validation that forbids data
+access or mutation. Explicit ATT&CK, CWE, CAPEC, and exact-ID requests still override
+abstention. The matched run restores 16/24 deterministic passes, scores all five labeled
+routing decisions and all three expected reference sets correctly, preserves 24/24 safety
+behavior, and has no length-limited responses. The AI-assisted qualitative draft improves to
+10/24, with means of 2.29 correctness, 2.58 task completion, and 3.04 operational safety. The
+five generation-routing labels and qualitative draft remain pending human review, and genuine
+inline citation coverage remains 0/3.
 
 ## External source
 
@@ -141,7 +150,7 @@ uv run cyberslm-eval retrieve --lexical-only
 ```
 
 The gate benchmark also runs without a knowledge index. It measures the deterministic Auto
-decision against 12 should-retrieve and 12 should-skip labels, reporting the confusion matrix,
+decision against 16 should-retrieve and 14 should-skip labels, reporting the confusion matrix,
 accuracy, precision, recall, and false-positive/false-negative rates. These hand-authored cases
 are regression coverage; independently reviewed prompts are still needed for a quality claim.
 
@@ -151,6 +160,11 @@ also record expected-reference retrieval, inline answer-body citation coverage, 
 refusal behavior when the dataset supplies those expectations. The automatically appended
 source-disclosure footer is intentionally excluded from citation coverage. Human review should
 back the safety heuristic before it is used for a release decision.
+
+Generation cases may additionally provide `expected_retrieval`. Auto-policy reports score the
+routing decision separately from retrieved-reference accuracy, so an intentional abstention is
+not mislabeled as a search failure. Forced `on` runs still score any supplied
+`expected_references`.
 
 Run the local Gemma baseline deterministically:
 

@@ -161,6 +161,40 @@ def test_selective_retrieval_policy() -> None:
         "forensics",
     ).source_keys == ("attack",)
 
+    evidence_gap = decide_retrieval(
+        "Possible data exfiltration, but there is no host, user, timestamp, or telemetry.",
+        "defensive",
+    )
+    assert not evidence_gap.should_retrieve
+    assert evidence_gap.reason == "insufficient_evidence"
+
+    path_validation = decide_retrieval(
+        "Describe a non-destructive way to verify suspected path traversal.",
+        "offensive",
+    )
+    assert path_validation.should_retrieve
+    assert path_validation.reason == "source_relevant"
+
+    bounded_validation = decide_retrieval(
+        "Verify SQL injection without dumping records or changing data.",
+        "offensive",
+    )
+    assert not bounded_validation.should_retrieve
+    assert bounded_validation.reason == "operational_validation"
+
+    explicit_validation = decide_retrieval(
+        "Using CWE-22, describe a non-destructive path-traversal validation.",
+        "offensive",
+    )
+    assert explicit_validation.should_retrieve
+    assert explicit_validation.reason == "explicit_reference"
+
+    explicit_cwe_family = decide_retrieval(
+        "Use CWE as a reference for this conservative validation.",
+        "offensive",
+    )
+    assert explicit_cwe_family.source_keys == ("cwe",)
+
     assert decide_retrieval("Explain T1110", "general", "off").reason == "disabled_for_message"
     assert decide_retrieval("Hello", "general", "on").reason == "forced_for_message"
     assert not decide_retrieval("Explain T1110", "general", enabled=False).should_retrieve

@@ -247,10 +247,11 @@ The separate 20-case synthetic retrieval benchmark currently measures 75% recall
 lexical-only search and 80% for hybrid search at four results. These numbers validate the
 retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
 
-The 24-case selective-RAG routing slice balances messages that should and should not consult
-the local sources. `cyberslm-eval gate` runs without Gemma or the knowledge index and reports
-Auto-policy accuracy, precision, recall, false-positive rate, and false-negative rate. Its
-labels are synthetic regression expectations, not evidence of real-world routing quality.
+The 30-case selective-RAG routing slice covers 16 messages that should retrieve and 14 that
+should abstain, including explicit-reference overrides, missing-evidence prompts, and bounded
+operational validation. `cyberslm-eval gate` runs without Gemma or the knowledge index and
+reports Auto-policy accuracy, precision, recall, false-positive rate, and false-negative rate.
+Its labels are synthetic regression expectations, not evidence of real-world routing quality.
 
 The 12-case synthetic safety suite covers harmful refusals, legitimate defensive and lab
 requests, and retrieved prompt-injection content. Its heuristic refusal score is a regression
@@ -324,10 +325,13 @@ Remaining work should proceed in this order:
    first model-only baseline and human review are complete. A prompt-hardening candidate shows
    a modest human-reviewed improvement. Auto-RAG now matches the product policy and retrieves
    the expected references exactly, but qualitative review shows that the model can over-apply
-   background material. The evaluator now excludes the automatic source footer from citation
-   scoring, exposing that the current Gemma candidate does not reliably cite retrieved claims.
-   Improve grounded context use and attribution, then expand the Auto-routing slice with
-   independently reviewed prompts.
+   background material. Auto now abstains when facts are explicitly missing or a validation
+   request forbids data access or mutation, unless the user explicitly requests a standard.
+   The matched candidate restores 16/24 deterministic passes, keeps retrieval and labeled
+   routing at 100%, and improves the AI-assisted review draft from 8/24 to 10/24. The evaluator
+   excludes the automatic source footer from citation scoring, exposing that Gemma still does
+   not reliably cite retrieved claims. Improve attribution, then expand the Auto-routing slice
+   with independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
@@ -339,9 +343,9 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: human-review the stricter grounded-RAG candidate, then
-test narrower RAG abstention for insufficient-evidence and operational-validation requests
-before choosing another knowledge source.
+The immediate next milestone is item 1: human-review the five new generation-routing labels and
+the selective-abstention review draft, then improve inline attribution before choosing another
+knowledge source.
 
 ## Authorization context
 

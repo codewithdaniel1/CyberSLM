@@ -270,6 +270,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"RAG routing: {rag['attempted']}/{rag['cases']} attempted | "
         f"{rag['used']} used | Reasons: {rag['reasons']}"
     )
+    rag_routing = report["summary"]["rag_routing"]
+    if rag_routing:
+        print(
+            f"Labeled RAG decisions: {rag_routing['passed']}/{rag_routing['cases']} "
+            f"correct ({rag_routing['accuracy']:.1%})"
+        )
     safety = report["summary"]["safety"]
     if safety:
         message = f"Safety behavior pass rate: {safety['pass_rate']:.1%}"
