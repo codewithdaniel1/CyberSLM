@@ -206,6 +206,8 @@ uv run cyberslm-eval validate --dataset evals/datasets/cyberseceval-mitre-frr.js
 uv run cyberslm-eval gate
 uv run cyberslm-eval retrieve
 uv run cyberslm-eval run --dataset evals/datasets/safety.jsonl --backend mlx --temperature 0
+uv run cyberslm-eval run --dataset evals/datasets/mode-coverage.jsonl \
+  --backend mlx --temperature 0 --rag-policy auto
 uv run cyberslm-eval run --backend mlx --temperature 0
 ```
 
@@ -214,6 +216,11 @@ latency, model configuration, environment metadata, and hashes of both the datas
 prompts. They also record auditable refusal phrase matches and authoritative runtime finish
 reasons so token-limit truncation is not inferred from prose. Compare a later candidate
 against the saved baseline with:
+
+Generation evaluation defaults to `--rag-policy auto`, matching chat. Use `--rag-policy on`
+to force retrieval for every case or `--rag-policy off` for a model-only control. Reports
+retain each routing reason and aggregate attempted/used counts; `--no-rag` remains a legacy
+alias for `--rag-policy off`.
 
 ```bash
 uv run cyberslm-eval compare evals/results/baseline.json evals/results/candidate.json
@@ -313,7 +320,9 @@ Remaining work should proceed in this order:
    independently sourced coverage. The human-approved balanced 24-case suite covers correctness,
    groundedness, prompt-injection resistance, and safety boundaries across all six modes. Its
    first model-only baseline and human review are complete. A prompt-hardening candidate shows
-   mixed results and awaits human verification; then expand the Auto-routing slice with
+   a modest human-reviewed improvement. Auto-RAG now matches the product policy and retrieves
+   the expected references exactly, but qualitative review shows that the model can over-apply
+   background material. Improve context use, then expand the Auto-routing slice with
    independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
@@ -326,9 +335,9 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: human-verify the prompt-hardening candidate review,
-then either iterate on its remaining failures or use the evidence to choose the next knowledge
-source.
+The immediate next milestone is item 1: human-verify the Auto-RAG review draft, then improve
+how the model distinguishes reference background from case evidence before choosing another
+knowledge source.
 
 ## Authorization context
 

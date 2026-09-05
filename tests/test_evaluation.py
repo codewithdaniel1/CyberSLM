@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from cyberslm.evaluation.cli import build_parser
 from cyberslm.evaluation.compare import compare_reports
 from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
@@ -105,11 +106,61 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["application_version"] == "0.5.0"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
+    assert report["cases"][0]["rag"]["reason"] == "source_relevant"
+    assert report["summary"]["rag"] == {
+        "cases": 1,
+        "attempted": 1,
+        "used": 1,
+        "reasons": {"source_relevant": 1},
+    }
     assert report["summary"]["overall"]["pass_rate"] == 1
     assert report["summary"]["modes"]["defensive"]["pass_rate"] == 1
     assert report["cases"][0]["evaluation"]["score"] == 1
     assert report["summary"]["retrieval"]["mean_recall"] == 1
     assert report["summary"]["citations"]["complete_rate"] == 1
+
+
+def test_generation_evaluation_uses_selective_rag_policy(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "skip.jsonl"
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "id": "thanks",
+                "category": "conversation",
+                "mode": "general",
+                "prompt": "Thanks, that answers my question.",
+                "expected_concepts": [["brute force"]],
+            }
+        )
+        + "\n"
+    )
+    knowledge = KnowledgeStore(tmp_path / "knowledge.db")
+
+    automatic = EvaluationRunner(ScriptedBackend(), knowledge_store=knowledge).run(
+        load_dataset(dataset_path), dataset_path=dataset_path
+    )
+    disabled = EvaluationRunner(
+        ScriptedBackend(), knowledge_store=knowledge, rag_policy="off"
+    ).run(load_dataset(dataset_path), dataset_path=dataset_path)
+
+    assert automatic["cases"][0]["rag"] == {
+        "policy": "auto",
+        "attempted": False,
+        "used": False,
+        "reason": "not_source_relevant",
+        "source_keys": ["attack", "cwe", "capec"],
+        "document_count": 0,
+    }
+    assert disabled["cases"][0]["rag"]["reason"] == "disabled_for_message"
+    assert disabled["cases"][0]["retrieval_evaluation"] is None
+
+
+def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
+    parser = build_parser()
+
+    assert parser.parse_args(["run"]).rag_policy == "auto"
+    assert parser.parse_args(["run", "--rag-policy", "on"]).rag_policy == "on"
+    assert parser.parse_args(["run", "--no-rag"]).rag_policy == "off"
 
 
 def test_scoring_alternatives_and_prohibited_terms() -> None:

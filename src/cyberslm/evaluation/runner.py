@@ -22,7 +22,7 @@ from cyberslm.evaluation.scoring import (
     score_safety,
 )
 from cyberslm.knowledge import KnowledgeStore
-from cyberslm.knowledge.retrieve import retrieve
+from cyberslm.knowledge.retrieve import RAG_POLICIES, decide_retrieval, retrieve
 from cyberslm.model import GenerationRequest, ModelBackend
 from cyberslm.modes import get_mode
 
@@ -87,10 +87,20 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     finish_reasons: dict[str, int] = defaultdict(int)
     for generation in generations:
         finish_reasons[generation["finish_reason"]] += 1
+    rag_decisions = [item["rag"] for item in results]
+    rag_reasons: dict[str, int] = defaultdict(int)
+    for decision in rag_decisions:
+        rag_reasons[decision["reason"]] += 1
     return {
         "overall": aggregate(results),
         "categories": {name: aggregate(items) for name, items in sorted(categories.items())},
         "modes": {name: aggregate(items) for name, items in sorted(modes.items())},
+        "rag": {
+            "cases": len(rag_decisions),
+            "attempted": sum(item["attempted"] for item in rag_decisions),
+            "used": sum(item["used"] for item in rag_decisions),
+            "reasons": dict(sorted(rag_reasons.items())),
+        },
         "retrieval": {
             "cases": len(retrieval),
             "passed": sum(item["passed"] for item in retrieval),
@@ -145,12 +155,17 @@ class EvaluationRunner:
         rag_results: int = 4,
         rag_max_chars: int = 16_000,
         embedder: Any | None = None,
+        rag_policy: str = "auto",
     ):
         self.backend = backend
         self.knowledge_store = knowledge_store
         self.rag_results = rag_results
         self.rag_max_chars = rag_max_chars
         self.embedder = embedder
+        normalized_policy = rag_policy.strip().casefold()
+        if normalized_policy not in RAG_POLICIES:
+            raise ValueError("Knowledge policy must be one of: auto, on, off")
+        self.rag_policy = normalized_policy
 
     def run(
         self,
@@ -164,6 +179,12 @@ class EvaluationRunner:
         for index, case in enumerate(cases, start=1):
             if progress:
                 progress(index, len(cases), case)
+            retrieval_decision = decide_retrieval(
+                case.prompt,
+                case.mode,
+                self.rag_policy,
+                enabled=self.knowledge_store is not None or self.rag_policy == "off",
+            )
             knowledge_documents = (
                 retrieve(
                     self.knowledge_store,
@@ -172,8 +193,9 @@ class EvaluationRunner:
                     limit=self.rag_results,
                     max_chars=self.rag_max_chars,
                     embedder=self.embedder,
+                    source_keys=retrieval_decision.source_keys,
                 )
-                if self.knowledge_store
+                if self.knowledge_store and retrieval_decision.should_retrieve
                 else []
             )
             request = GenerationRequest(
@@ -210,9 +232,14 @@ class EvaluationRunner:
                         }
                         for document in knowledge_documents
                     ],
+                    "rag": retrieval_decision.metadata(len(knowledge_documents)),
                     "latency_seconds": round(latency, 4),
                     "evaluation": evaluation,
-                    "retrieval_evaluation": score_retrieval(case, knowledge_documents),
+                    "retrieval_evaluation": (
+                        score_retrieval(case, knowledge_documents)
+                        if self.rag_policy != "off"
+                        else None
+                    ),
                     "citation_evaluation": score_citations(response, knowledge_documents),
                     "safety_evaluation": safety_evaluation,
                     "metadata": case.metadata,

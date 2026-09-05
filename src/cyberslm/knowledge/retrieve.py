@@ -28,7 +28,8 @@ SOURCE_SIGNALS = {
     "attack": re.compile(
         r"\b(?:failed (?:ssh )?logins?|password (?:guessing|spraying)|brute force|"
         r"credential (?:access|dumping)|lateral movement|privilege escalation|persistence|"
-        r"command and control|c2|exfiltrat\w*|phishing|ransomware|malware|powershell|"
+        r"command and control|c2|exfiltrat\w*|phishing|ransomware|"
+        r"malware[- ](?:analysis|behavior|execution|infection|activity|sample)|powershell|"
         r"process injection|scheduled task|event id \d+|threat hunt\w*|ioc|"
         r"indicator of compromise|incident response|security alert|detection engineering|"
         r"suspicious (?:login|sign-in|authentication|process|traffic)|unauthorized access|"
@@ -39,14 +40,15 @@ SOURCE_SIGNALS = {
         r"\b(?:sql injection|command injection|path traversal|cross-site scripting|xss|"
         r"cross-site request forgery|csrf|server-side request forgery|ssrf|buffer overflow|"
         r"use-after-free|deserializ\w*|input validation|memory safety|secure cod\w*|"
-        r"code review|review (?:this )?(?:code|function)|software weakness|vulnerabilit\w*|"
+        r"code review|review (?:this )?(?:code|function)|software weakness|"
         r"security (?:bug|issue|flaw)|untrusted input|unsafe function)\b|"
         r"cursor\.execute|os\.system|subprocess|strcpy|memcpy|shell\s*=\s*true|\beval\s*\(",
         re.IGNORECASE,
     ),
     "capec": re.compile(
-        r"\b(?:attack pattern|abuse case|threat model\w*|social engineering|"
-        r"reconnaissance|adversary behavior)\b",
+        r"\b(?:attack pattern|abuse case|social engineering|"
+        r"reconnaissance|adversary behavior|(?:build|create|develop|construct)(?:ing|ed)?\s+"
+        r"(?:an?\s+)?(?:authorized\s+)?threat model\w*)\b",
         re.IGNORECASE,
     ),
 }
@@ -132,18 +134,28 @@ def expanded_query(prompt: str) -> str:
     additions: list[str] = []
     rules = (
         (("failed login", "password guess", "brute force", "ssh login"), "T1110 brute force"),
-        (("cursor.execute", " select ", "sql query"), "CWE-89 SQL injection"),
+        (("sql injection", "cursor.execute", " select ", "sql query"), "CWE-89 SQL injection"),
         (("shell command", "operating system command", "command injection"), "CWE-78"),
         (("path traversal", "dot-dot path", "outside its intended directory"), "CWE-22"),
+        (("use-after-free", "use after free"), "CWE-416 use after free"),
         (("ssrf", "server-side request forgery"), "CWE-918 server-side request forgery"),
         (("cross-site scripting", "xss"), "CWE-79 cross-site scripting"),
         (("cross-site request forgery", "csrf"), "CWE-352 cross-site request forgery"),
         (("powershell", "event id 4104"), "T1059.001 PowerShell script block"),
+        (("dns beacon", "dns query", "periodic dns"), "T1071.004 DNS"),
     )
     padded = f" {lowered} "
     for signals, expansion in rules:
         if any(signal in padded for signal in signals):
             additions.append(expansion)
+    freed_buffer_write = re.search(
+        r"\bfree\s*\(\s*(?P<pointer>[A-Za-z_]\w*)\s*\)\s*;.{0,200}"
+        r"\b(?:memcpy|memmove|strcpy|strncpy)\s*\(\s*(?P=pointer)\b",
+        prompt,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if freed_buffer_write and not any("CWE-416" in item for item in additions):
+        additions.append("CWE-416 use after free")
     return " ".join([prompt, *additions])
 
 

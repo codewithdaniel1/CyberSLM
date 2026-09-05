@@ -58,7 +58,20 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--model", default=settings.model_id)
     run.add_argument("--max-tokens", type=int, default=settings.max_tokens)
     run.add_argument("--temperature", type=float, default=0.0)
-    run.add_argument("--no-rag", action="store_true", help="Evaluate without local retrieval")
+    rag_policy = run.add_mutually_exclusive_group()
+    rag_policy.add_argument(
+        "--rag-policy",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help="Per-case local knowledge policy (default: auto, matching chat)",
+    )
+    rag_policy.add_argument(
+        "--no-rag",
+        action="store_const",
+        const="off",
+        dest="rag_policy",
+        help="Deprecated alias for --rag-policy off",
+    )
     run.add_argument("--rag-results", type=int, default=settings.rag_results)
     run.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
 
@@ -199,7 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     backend = create_backend(run_settings)
     knowledge_store = None
     embedder = None
-    if not args.no_rag:
+    if args.rag_policy != "off":
         candidate_store = KnowledgeStore(settings.knowledge_database_path)
         if candidate_store.status()["ready"]:
             knowledge_store = candidate_store
@@ -215,6 +228,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         rag_results=args.rag_results,
         rag_max_chars=settings.rag_max_chars,
         embedder=embedder,
+        rag_policy=args.rag_policy,
     ).run(
         cases,
         dataset_path=args.dataset,
@@ -225,6 +239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "temperature": args.temperature,
             "limit": args.limit or None,
             "rag_enabled": knowledge_store is not None,
+            "rag_policy": args.rag_policy,
             "rag_results": args.rag_results,
             "rag_semantic_enabled": embedder is not None,
             "rag_embedding_model": embedder.model_name if embedder else None,
@@ -250,6 +265,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Recall: {retrieval['mean_recall']:.1%} | "
             f"Precision: {retrieval['mean_precision']:.1%}"
         )
+    rag = report["summary"]["rag"]
+    print(
+        f"RAG routing: {rag['attempted']}/{rag['cases']} attempted | "
+        f"{rag['used']} used | Reasons: {rag['reasons']}"
+    )
     safety = report["summary"]["safety"]
     if safety:
         message = f"Safety behavior pass rate: {safety['pass_rate']:.1%}"

@@ -36,9 +36,17 @@ the strict rule that every dimension must score at least 3/4. Its means are 2.04
 A first prompt-hardening candidate targets fabricated observations, guessed mappings, embedded
 instructions, scope changes, and destructive validation. Its deterministic keyword pass rate
 is 15/24 (62.5%), down one case, while truncations improve from one to zero and safety behavior
-remains 24/24. The AI-assisted qualitative draft improves from 7/24 to 9/24 and raises mean
-correctness from 2.04 to 2.17, but lowers mean operational safety from 3.04 to 2.96. Human review
-is required before treating this mixed candidate result as accepted evidence.
+remains 24/24. The project owner accepted its AI-assisted qualitative review: strict passes
+improve from 7/24 to 9/24 and mean correctness rises from 2.04 to 2.17, while mean operational
+safety falls from 3.04 to 2.96.
+
+The matched Auto-RAG run searches 5/24 cases and uses references in all five. The four cases
+with expected references achieve 100% recall and precision, all generated citations cover the
+supplied references, safety behavior remains 24/24, and deterministic scoring improves to
+16/24 (66.7%). The AI-assisted qualitative draft scores 8/24, one below the model-only control,
+because the model sometimes treats relevant background material as incident-specific evidence.
+This draft requires human verification. The evidence favors better context use and answer
+grounding before adding more sources.
 
 ## External source
 
@@ -137,8 +145,16 @@ Run the local Gemma baseline deterministically:
 ```bash
 uv run cyberslm-eval run --backend mlx --temperature 0
 uv run cyberslm-eval run --dataset evals/datasets/mode-coverage.jsonl \
-  --backend mlx --temperature 0
+  --backend mlx --temperature 0 --rag-policy auto
+uv run cyberslm-eval run --dataset evals/datasets/mode-coverage.jsonl \
+  --backend mlx --temperature 0 --rag-policy off
 ```
+
+`run` defaults to `--rag-policy auto`, using the same per-message decision function and source
+routing as chat. `--rag-policy on` forces retrieval for every case, while `--rag-policy off`
+creates a model-only control. The legacy `--no-rag` flag remains an alias for `off`. Reports
+record the policy, reason, selected source families, attempted state, and actual document use
+for every case, plus aggregate routing counts.
 
 Start with a small deterministic external sample before running all 750 cases:
 
@@ -163,8 +179,9 @@ reduced length-limited generations from four to one. AI-assisted inspection stil
 invalid C, so this is evidence of better completion behavior only—not correctness. Future
 candidates must pass compiler-backed syntax checks and human review.
 
-When the local knowledge index is populated, evaluations include RAG by default and record
-the source versions and hashes in the report. Use `--no-rag` for a model-only control run.
+When the local knowledge index is populated, evaluations use selective Auto RAG by default
+and record the source versions and hashes in the report. Use `--rag-policy off` for a
+model-only control run.
 
 Exercise the harness without loading a model:
 

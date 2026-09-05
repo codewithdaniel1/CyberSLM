@@ -87,7 +87,10 @@ def test_mode_aware_retrieval_and_query_expansion(tmp_path: Path) -> None:
     replace(
         store,
         "cwe",
-        [document("cwe:CWE-89", "CWE-89 SQL Injection", "Parameterized SQL queries")],
+        [
+            document("cwe:CWE-89", "CWE-89 SQL Injection", "Parameterized SQL queries"),
+            document("cwe:CWE-416", "CWE-416 Use After Free", "Freed memory is reused"),
+        ],
     )
     replace(
         store,
@@ -105,6 +108,15 @@ def test_mode_aware_retrieval_and_query_expansion(tmp_path: Path) -> None:
     assert all(item["source_key"] == "cwe" for item in code_results)
     assert retrieve(store, "Decode this Base64 string", "ctf") == []
     assert "T1110" in expanded_query("Investigate failed SSH logins")
+    assert "T1071.004" in expanded_query("Investigate a periodic DNS query")
+    assert "CWE-89" in expanded_query("Verify suspected SQL injection")
+    assert "CWE-416" in expanded_query("Review this use-after-free")
+    assert "CWE-416" in expanded_query(
+        'char *p = malloc(16); free(p); strcpy(p, "ok");'
+    )
+    assert retrieve(store, "Review this use-after-free", "secure_code")[0][
+        "external_id"
+    ] == "CWE-416"
     defensive_results = retrieve(store, "Investigate failed SSH logins", "defensive")
     assert [item["external_id"] for item in defensive_results] == ["T1110"]
 
@@ -127,6 +139,27 @@ def test_selective_retrieval_policy() -> None:
     assert exact.should_retrieve
     assert exact.reason == "explicit_reference"
     assert exact.source_keys == ("attack",)
+
+    assert not decide_retrieval(
+        "The threat model was not provided, so compare these authentication systems.",
+        "general",
+    ).should_retrieve
+    assert decide_retrieval(
+        "Build an authorized threat model for this service.",
+        "offensive",
+    ).source_keys == ("capec",)
+    assert not decide_retrieval(
+        "The file is mystery.bin; identify its exact vulnerability without the file.",
+        "ctf",
+    ).should_retrieve
+    assert not decide_retrieval(
+        "Does a hash from a public malware report prove attribution?",
+        "forensics",
+    ).should_retrieve
+    assert decide_retrieval(
+        "Plan safe malware sample analysis.",
+        "forensics",
+    ).source_keys == ("attack",)
 
     assert decide_retrieval("Explain T1110", "general", "off").reason == "disabled_for_message"
     assert decide_retrieval("Hello", "general", "on").reason == "forced_for_message"
