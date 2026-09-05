@@ -1,8 +1,8 @@
 # Auto-RAG routing review v3
 
-Status: **Pending project-owner review**
+Status: **Project-owner approved**
 
-Dataset SHA-256: `8d1707a84ddffc669053af15dd92ee8971aa46edfe240cd8e5d1ebf3c34b8ded`
+Dataset SHA-256: `5a1778115edfe1d1afb15a0687383cd10ecdc4f75c37f92e9d7b2447c09f81f3`
 
 This review covers only the 18 AI-authored version-3 additions to
 `datasets/selective-rag.jsonl`. Check that each prompt's mode and expected Auto-RAG decision
@@ -32,7 +32,7 @@ label correctly; that is a regression result, not evidence that the labels are v
 
 ## Review decision
 
-- Reviewer: pending
-- Reviewed at: pending
-- Decision: pending
-- Notes: Confirm, revise, or reject any mode, expected decision, prompt, or rationale above.
+- Reviewer: Project owner
+- Reviewed at: 2026-09-05T18:16:21Z
+- Decision: Approved all 18 proposed modes, routing labels, prompts, and rationales.
+- Notes: Approval was given after reviewing the version-3 slice and its 48/48 gate result.

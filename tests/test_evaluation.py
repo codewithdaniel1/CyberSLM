@@ -385,18 +385,14 @@ def test_behavior_only_case_and_false_refusal_affect_overall_result(tmp_path: Pa
 def test_selective_rag_dataset_has_no_gate_errors() -> None:
     dataset_path = Path("evals/datasets/selective-rag.jsonl")
     cases = load_dataset(dataset_path)
-    pending_cases = [
-        case
-        for case in cases
-        if case.metadata.get("routing_review_status") == "pending-human-review"
-    ]
+    version_three_cases = [case for case in cases if case.metadata.get("version") == "3"]
 
     report = evaluate_rag_gate(cases, dataset_path=dataset_path)
 
     assert len(cases) == 48
     assert Counter(case.expected_retrieval for case in cases) == {True: 24, False: 24}
-    assert len(pending_cases) == 18
-    assert Counter(case.mode for case in pending_cases) == {
+    assert len(version_three_cases) == 18
+    assert Counter(case.mode for case in version_three_cases) == {
         "general": 3,
         "defensive": 3,
         "offensive": 3,
@@ -404,8 +400,15 @@ def test_selective_rag_dataset_has_no_gate_errors() -> None:
         "forensics": 3,
         "secure_code": 3,
     }
-    assert Counter(case.expected_retrieval for case in pending_cases) == {True: 8, False: 10}
-    assert all(case.metadata["source"] == "ai-authored-draft" for case in pending_cases)
+    assert Counter(case.expected_retrieval for case in version_three_cases) == {
+        True: 8,
+        False: 10,
+    }
+    assert all(case.metadata["source"] == "ai-authored-draft" for case in version_three_cases)
+    assert all(
+        case.metadata["routing_review_status"] == "human-approved"
+        for case in version_three_cases
+    )
     dataset_sha256 = hashlib.sha256(dataset_path.read_bytes()).hexdigest()
     assert dataset_sha256 in Path("evals/routing-review-v3.md").read_text()
     assert report["summary"]["cases"] == 48

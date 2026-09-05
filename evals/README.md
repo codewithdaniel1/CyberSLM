@@ -177,7 +177,7 @@ uv run cyberslm-eval retrieve --lexical-only
 The gate benchmark also runs without a knowledge index. It measures the deterministic Auto
 decision against 24 should-retrieve and 24 should-skip labels, reporting the confusion matrix,
 accuracy, precision, recall, and false-positive/false-negative rates. The 18 version-3
-additions contribute three prompts per mode and remain pending project-owner review in
+additions contribute three prompts per mode and are project-owner approved in
 [`routing-review-v3.md`](routing-review-v3.md). These synthetic cases are regression coverage;
 they are not a real-world routing-quality claim.
 

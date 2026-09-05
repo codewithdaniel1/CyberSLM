@@ -272,7 +272,7 @@ retrieval wiring and expose regressions; they are not a broad cybersecurity benc
 The selective-RAG routing slice now contains 48 balanced cases: 24 should retrieve and 24
 should abstain. It includes explicit-reference overrides, source-family coverage,
 missing-evidence prompts, bounded operational validation, and non-reference tasks across all
-six modes. The 18 version-3 additions remain pending project-owner review in
+six modes. The 18 version-3 additions are project-owner approved in
 [`evals/routing-review-v3.md`](evals/routing-review-v3.md). `cyberslm-eval gate` runs without
 Gemma or the knowledge index and reports Auto-policy accuracy, precision, recall,
 false-positive rate, and false-negative rate. These synthetic labels are regression
@@ -361,7 +361,7 @@ Remaining work should proceed in this order:
    answer. The source-hash-locked claim-support workflow and first focused review are complete:
    both extracted mappings were only partially supported and one retrieved source was unlinked,
    so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
-   48 balanced cases, with the 18 new labels pending project-owner review.
+   48 balanced cases, with all 18 new labels project-owner approved.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
