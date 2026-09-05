@@ -16,6 +16,7 @@ from typing import Any
 from cyberslm import __version__
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import (
+    score_attributions,
     score_citations,
     score_response,
     score_retrieval,
@@ -77,6 +78,7 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     retrieval = [item["retrieval_evaluation"] for item in results]
     retrieval = [item for item in retrieval if item is not None]
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
+    attributions = [item["attribution_evaluation"] for item in results if item["knowledge"]]
     safety = [item["safety_evaluation"] for item in results]
     safety = [item for item in safety if item is not None]
     answer_safely = [item for item in safety if item["expected_behavior"] == "answer_safely"]
@@ -137,6 +139,19 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_coverage": round(fmean(item["coverage"] for item in citations), 4),
         }
         if citations
+        else None,
+        "attributions": {
+            "cases": len(attributions),
+            "complete": sum(item["complete"] for item in attributions),
+            "complete_rate": round(
+                sum(item["complete"] for item in attributions) / len(attributions), 4
+            ),
+            "mean_coverage": round(fmean(item["coverage"] for item in attributions), 4),
+            "unmapped_valid_citations": sum(
+                len(item["unmapped_valid_citations"]) for item in attributions
+            ),
+        }
+        if attributions
         else None,
         "safety": {
             "cases": len(safety),
@@ -255,6 +270,7 @@ class EvaluationRunner:
                     "knowledge": [
                         {
                             "id": document["id"],
+                            "external_id": document["external_id"],
                             "title": document["title"],
                             "url": document["url"],
                             "source_key": document["source_key"],
@@ -272,6 +288,9 @@ class EvaluationRunner:
                         else None
                     ),
                     "citation_evaluation": score_citations(response, knowledge_documents),
+                    "attribution_evaluation": score_attributions(
+                        response, knowledge_documents
+                    ),
                     "safety_evaluation": safety_evaluation,
                     "metadata": case.metadata,
                 }

@@ -59,6 +59,29 @@ def inline_citation_numbers(response: str) -> set[int]:
     return {int(value) for value in re.findall(r"\[(\d{1,3})]", response_body)}
 
 
+def exact_id_citation_numbers(
+    response: str,
+    documents: list[dict[str, Any]],
+) -> set[int]:
+    """Find citations placed after their source's exact identifier on the same line."""
+    response_body = response.split(SOURCE_FOOTER_MARKER, maxsplit=1)[0]
+    mapped: set[int] = set()
+    for index, document in enumerate(documents, start=1):
+        external_id = document.get("external_id")
+        if not isinstance(external_id, str) or not external_id.strip():
+            continue
+        identifier = re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(external_id.strip())}(?![A-Za-z0-9])",
+            re.IGNORECASE,
+        )
+        for line in response_body.splitlines():
+            match = identifier.search(line)
+            if match and re.search(rf"\[{index}]", line[match.end() :]):
+                mapped.add(index)
+                break
+    return mapped
+
+
 def source_footer(
     documents: list[dict[str, Any]] | None,
     response_text: str | None = None,
@@ -69,12 +92,11 @@ def source_footer(
     if response_text is not None:
         citations = inline_citation_numbers(response_text)
         cited = sum(index in citations for index in range(1, len(documents) + 1))
-        if cited == len(documents):
-            heading = " retrieved — all cited inline**"
-        elif cited:
-            heading = " retrieved — partially cited inline**"
-        else:
-            heading = " retrieved — not cited inline**"
+        exact = len(exact_id_citation_numbers(response_text, documents))
+        heading = (
+            f" retrieved — inline citations: {cited}/{len(documents)}; "
+            f"exact-ID citations: {exact}/{len(documents)}**"
+        )
     lines = [f"{SOURCE_FOOTER_MARKER}{heading}"]
     for index, document in enumerate(documents, start=1):
         lines.append(

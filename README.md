@@ -217,8 +217,9 @@ prompt contract (mode instructions plus the retrieved-background wrapper). They 
 auditable refusal phrase matches and authoritative runtime finish reasons so token-limit
 truncation is not inferred from prose. Citation scoring examines only the generated answer body;
 the application-added source-disclosure footer does not count as an inline model citation.
-That footer explicitly says whether all, some, or none of the retrieved references were cited
-inline, so retrieval is never presented to the user as proof of grounded attribution.
+That footer shows both the number of inline citation markers and the number placed after their
+source's exact ATT&CK/CWE/CAPEC identifier, so retrieval is never presented as proof of
+grounded attribution. Exact-ID proximity is a structural check, not semantic entailment.
 Compare a later candidate against the saved baseline with:
 
 Generation evaluation defaults to `--rag-policy auto`, matching chat. Use `--rag-policy on`
@@ -331,8 +332,9 @@ Remaining work should proceed in this order:
    request forbids data access or mutation, unless the user explicitly requests a standard.
    The matched candidate restores 16/24 deterministic passes, keeps retrieval and labeled
    routing at 100%, and improves the human-approved AI-assisted review from 8/24 to 10/24. The
-   evaluator excludes the automatic source footer from citation scoring, exposing that Gemma
-   still does not reliably cite retrieved claims. Improve attribution, then expand the
+   evaluator excludes the automatic source footer from citation scoring and separately measures
+   exact-ID attribution, exposing that Gemma still does not reliably cite retrieved claims.
+   Improve attribution, then expand the
    Auto-routing slice with independently reviewed prompts.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
@@ -345,9 +347,9 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: design separately scored attribution assistance rather
-than forcing citations through longer prompts, then expand the routing and grounding evaluation
-before choosing another knowledge source.
+The immediate next milestone is item 1: evaluate separately labeled attribution assistance
+without rewriting model claims, then expand the routing and grounding evaluation before choosing
+another knowledge source.
 
 ## Authorization context
 

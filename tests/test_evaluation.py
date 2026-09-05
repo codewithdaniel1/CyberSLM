@@ -13,6 +13,7 @@ from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
 from cyberslm.evaluation.scoring import (
+    score_attributions,
     score_citations,
     score_response,
     score_retrieval,
@@ -108,6 +109,7 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["application_version"] == "0.5.0"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
+    assert report["cases"][0]["knowledge"][0]["external_id"] == "T1110"
     assert report["cases"][0]["rag"]["reason"] == "source_relevant"
     assert report["summary"]["rag"] == {
         "cases": 1,
@@ -120,6 +122,13 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["cases"][0]["evaluation"]["score"] == 1
     assert report["summary"]["retrieval"]["mean_recall"] == 1
     assert report["summary"]["citations"]["complete_rate"] == 1
+    assert report["summary"]["attributions"] == {
+        "cases": 1,
+        "complete": 1,
+        "complete_rate": 1,
+        "mean_coverage": 1,
+        "unmapped_valid_citations": 0,
+    }
 
 
 def test_generation_evaluation_uses_selective_rag_policy(tmp_path: Path) -> None:
@@ -222,13 +231,22 @@ def test_citation_scoring_ignores_automatic_source_footer() -> None:
     ]
     footer = source_footer(documents)
     uncited_footer = source_footer(documents, "No inline citation.")
-    cited_footer = source_footer(documents, "Supported by [1].")
+    cited_footer = source_footer(documents, "T1110 [1] describes brute force.")
+    unmapped_footer = source_footer(documents, "Investigate the domain [1].")
 
     assert score_citations(f"No inline citation.{footer}", documents)["coverage"] == 0
     assert score_citations(f"Supported by [1].{footer}", documents)["complete"] is True
-    assert "not cited inline" in uncited_footer
-    assert "all cited inline" in cited_footer
+    assert "inline citations: 0/1; exact-ID citations: 0/1" in uncited_footer
+    assert "inline citations: 1/1; exact-ID citations: 1/1" in cited_footer
+    assert "inline citations: 1/1; exact-ID citations: 0/1" in unmapped_footer
     assert score_citations(f"No inline citation.{uncited_footer}", documents)["coverage"] == 0
+
+    exact = score_attributions("T1110 [1] describes brute force.", documents)
+    misplaced = score_attributions("Investigate the domain [1].", documents)
+    assert exact["complete"] is True
+    assert exact["exact_id_citations"] == ["T1110"]
+    assert misplaced["coverage"] == 0
+    assert misplaced["unmapped_valid_citations"] == [1]
 
 
 def test_safety_scoring_detects_expected_refusal(tmp_path: Path) -> None:

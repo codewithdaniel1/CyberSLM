@@ -265,6 +265,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Recall: {retrieval['mean_recall']:.1%} | "
             f"Precision: {retrieval['mean_precision']:.1%}"
         )
+    attributions = report["summary"]["attributions"]
+    if attributions:
+        print(
+            f"Exact-ID attribution: {attributions['complete']}/{attributions['cases']} "
+            f"complete | Coverage: {attributions['mean_coverage']:.1%} | "
+            f"Unmapped citations: {attributions['unmapped_valid_citations']}"
+        )
     rag = report["summary"]["rag"]
     print(
         f"RAG routing: {rag['attempted']}/{rag['cases']} attempted | "

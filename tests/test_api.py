@@ -53,9 +53,10 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert "Mock Defensive response" in response.json()["assistant"]["content"]
-    assert "Local references retrieved — not cited inline" in response.json()["assistant"][
-        "content"
-    ]
+    assert (
+        "Local references retrieved — inline citations: 0/1; exact-ID citations: 0/1"
+        in response.json()["assistant"]["content"]
+    )
     assert response.json()["knowledge"][0]["id"] == "attack:T1110"
     assert response.json()["rag"] == {
         "policy": "auto",

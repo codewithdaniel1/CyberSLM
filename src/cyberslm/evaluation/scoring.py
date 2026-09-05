@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from cyberslm.evaluation.schemas import EvalCase
-from cyberslm.model import SOURCE_FOOTER_MARKER
+from cyberslm.model import SOURCE_FOOTER_MARKER, exact_id_citation_numbers
 
 REFUSAL_OPENING_CHARS = 800
 
@@ -72,6 +72,25 @@ def score_citations(response: str, documents: list[dict[str, Any]]) -> dict[str,
         "invalid_citations": invalid,
         "coverage": round(len(valid) / len(expected), 4) if expected else 1.0,
         "complete": valid == expected and not invalid,
+    }
+
+
+def score_attributions(response: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
+    citation_score = score_citations(response, documents)
+    exact_numbers = exact_id_citation_numbers(response, documents)
+    exact_ids = [
+        document["external_id"]
+        for index, document in enumerate(documents, start=1)
+        if index in exact_numbers
+    ]
+    valid_numbers = set(citation_score["valid_citations"])
+    unmapped = sorted(valid_numbers - exact_numbers)
+    return {
+        "references": len(documents),
+        "exact_id_citations": exact_ids,
+        "unmapped_valid_citations": unmapped,
+        "coverage": round(len(exact_numbers) / len(documents), 4) if documents else 1.0,
+        "complete": len(exact_numbers) == len(documents) and not unmapped,
     }
 
 

@@ -68,9 +68,12 @@ Genuine inline citation coverage remains 0/3.
 
 Two focused prompt-only citation experiments reached 2/3 and 1/3 coverage, respectively, but
 misplaced one citation and degraded technical answer quality. Neither prompt was adopted.
-Instead, the application footer now reports whether all, some, or none of the retrieved sources
-were cited inline. Future attribution assistance must be measured separately from model-authored
-citations and must not silently imply that retrieval proves a case-specific claim.
+Instead, the application footer now reports the inline-citation count and the stricter exact-ID
+citation count. The latter requires a source number after that source's exact ATT&CK/CWE/CAPEC
+identifier on the same line. The focused verifier run correctly reports 0/3 exact-ID
+attributions for the adopted prompt. This structural check does not establish that a surrounding
+claim is entailed by the source. Future assistance must be measured separately from
+model-authored citations and must not imply that retrieval proves a case-specific claim.
 
 ## External source
 
@@ -162,10 +165,12 @@ are regression coverage; independently reviewed prompts are still needed for a q
 
 Retrieval reports record recall, precision, exact-reference coverage, latency, retrieval method,
 embedding configuration, knowledge versions, and a report integrity hash. Generation reports
-also record expected-reference retrieval, inline answer-body citation coverage, and heuristic
-refusal behavior when the dataset supplies those expectations. The automatically appended
-source-disclosure footer is intentionally excluded from citation coverage. Human review should
-back the safety heuristic before it is used for a release decision.
+also record expected-reference retrieval, inline answer-body citation coverage, exact-ID
+attribution coverage, unmapped citations, and heuristic refusal behavior when the dataset
+supplies those expectations. The automatically appended source-disclosure footer is excluded
+from citation and attribution coverage. Saved knowledge records retain their external IDs so
+attribution results can be independently recomputed. Human review should back the structural
+and safety heuristics before either is used for a release decision.
 
 Generation cases may additionally provide `expected_retrieval`. Auto-policy reports score the
 routing decision separately from retrieved-reference accuracy, so an intentional abstention is
