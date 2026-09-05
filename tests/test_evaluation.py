@@ -221,9 +221,14 @@ def test_citation_scoring_ignores_automatic_source_footer() -> None:
         }
     ]
     footer = source_footer(documents)
+    uncited_footer = source_footer(documents, "No inline citation.")
+    cited_footer = source_footer(documents, "Supported by [1].")
 
     assert score_citations(f"No inline citation.{footer}", documents)["coverage"] == 0
     assert score_citations(f"Supported by [1].{footer}", documents)["complete"] is True
+    assert "not cited inline" in uncited_footer
+    assert "all cited inline" in cited_footer
+    assert score_citations(f"No inline citation.{uncited_footer}", documents)["coverage"] == 0
 
 
 def test_safety_scoring_detects_expected_refusal(tmp_path: Path) -> None:
@@ -368,7 +373,7 @@ def test_mode_coverage_dataset_is_balanced_and_human_approved() -> None:
     assert len(routing_cases) == 5
     assert Counter(case.expected_retrieval for case in routing_cases) == {True: 3, False: 2}
     assert all(
-        case.metadata["routing_review_status"] == "pending-human-review"
+        case.metadata["routing_review_status"] == "human-approved"
         for case in routing_cases
     )
 

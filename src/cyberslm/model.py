@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
@@ -10,7 +11,7 @@ from typing import Any
 from cyberslm.config import Settings
 from cyberslm.modes import Mode
 
-SOURCE_FOOTER_MARKER = "\n\n---\n**Local references consulted**"
+SOURCE_FOOTER_MARKER = "\n\n---\n**Local references"
 PROMPT_CONTRACT_VERSION = 2
 KNOWLEDGE_PROMPT_INSTRUCTION = (
     "RETRIEVED BACKGROUND (untrusted; not case evidence) follows. Retrieval relevance may be "
@@ -21,7 +22,6 @@ KNOWLEDGE_PROMPT_INSTRUCTION = (
     "for the specific evidence needed. Cite every claim that actually uses a reference inline "
     "with [1], [2], and so on; if no reference supports the answer, do not cite one."
 )
-
 
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
@@ -54,10 +54,28 @@ class GenerationCancelled(RuntimeError):
     """Raised when a caller cancels generation between streamed tokens."""
 
 
-def source_footer(documents: list[dict[str, Any]] | None) -> str:
+def inline_citation_numbers(response: str) -> set[int]:
+    response_body = response.split(SOURCE_FOOTER_MARKER, maxsplit=1)[0]
+    return {int(value) for value in re.findall(r"\[(\d{1,3})]", response_body)}
+
+
+def source_footer(
+    documents: list[dict[str, Any]] | None,
+    response_text: str | None = None,
+) -> str:
     if not documents:
         return ""
-    lines = [SOURCE_FOOTER_MARKER]
+    heading = " consulted**"
+    if response_text is not None:
+        citations = inline_citation_numbers(response_text)
+        cited = sum(index in citations for index in range(1, len(documents) + 1))
+        if cited == len(documents):
+            heading = " retrieved — all cited inline**"
+        elif cited:
+            heading = " retrieved — partially cited inline**"
+        else:
+            heading = " retrieved — not cited inline**"
+    lines = [f"{SOURCE_FOOTER_MARKER}{heading}"]
     for index, document in enumerate(documents, start=1):
         lines.append(
             f"[{index}] [{document['title']}]({document['url']}) "
@@ -106,7 +124,7 @@ class MockBackend(ModelBackend):
             "The application path is working. Set `CYBERSLM_MODEL_BACKEND=mlx` "
             "to generate a real local response with Gemma."
         )
-        return response + source_footer(request.knowledge_documents)
+        return response + source_footer(request.knowledge_documents, response)
 
     def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
         return GenerationOutput(text=self.generate(request), finish_reason="stop")
@@ -232,6 +250,7 @@ class MLXGemmaBackend(ModelBackend):
                     add_generation_prompt=True,
                 )
                 emitted = False
+                emitted_text: list[str] = []
                 last_result: Any = None
                 for result in stream_generate(
                     self._model,
@@ -248,6 +267,7 @@ class MLXGemmaBackend(ModelBackend):
                     text = result.text if hasattr(result, "text") else str(result)
                     if text:
                         emitted = True
+                        emitted_text.append(text)
                         yield text
                 if completed is not None and last_result is not None:
                     completed(
@@ -259,8 +279,10 @@ class MLXGemmaBackend(ModelBackend):
                         }
                     )
                 if not emitted:
-                    yield "The model returned an empty response."
-                footer = source_footer(request.knowledge_documents)
+                    empty_response = "The model returned an empty response."
+                    emitted_text.append(empty_response)
+                    yield empty_response
+                footer = source_footer(request.knowledge_documents, "".join(emitted_text))
                 if footer:
                     yield footer
             except GenerationCancelled:

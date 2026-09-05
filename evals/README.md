@@ -63,8 +63,14 @@ abstention. The matched run restores 16/24 deterministic passes, scores all five
 routing decisions and all three expected reference sets correctly, preserves 24/24 safety
 behavior, and has no length-limited responses. The AI-assisted qualitative draft improves to
 10/24, with means of 2.29 correctness, 2.58 task completion, and 3.04 operational safety. The
-five generation-routing labels and qualitative draft remain pending human review, and genuine
-inline citation coverage remains 0/3.
+project owner approved both the five generation-routing labels and the qualitative review.
+Genuine inline citation coverage remains 0/3.
+
+Two focused prompt-only citation experiments reached 2/3 and 1/3 coverage, respectively, but
+misplaced one citation and degraded technical answer quality. Neither prompt was adopted.
+Instead, the application footer now reports whether all, some, or none of the retrieved sources
+were cited inline. Future attribution assistance must be measured separately from model-authored
+citations and must not silently imply that retrieval proves a case-specific claim.
 
 ## External source
 

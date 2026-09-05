@@ -109,5 +109,5 @@ def test_model_prompt_and_response_include_local_references() -> None:
     assert "Cite every claim" in prompt
     assert "END RETRIEVED BACKGROUND" in prompt
     assert "[1] T1110 — Brute Force" in prompt
-    assert "Local references consulted" in response
+    assert "Local references retrieved — not cited inline" in response
     assert "https://attack.mitre.org/techniques/T1110/" in response
