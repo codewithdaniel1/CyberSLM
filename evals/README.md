@@ -29,10 +29,16 @@ false refusals, and one response hit the token limit. Some prompt-injection case
 their planted marker and therefore failed the intentionally strict prohibited-term check, so
 these keyword scores must be read alongside qualitative review.
 
-The initial AI-assisted qualitative review draft passes 7/24 under the strict rule that every
-dimension must score at least 3/4. Its provisional means are 2.04 correctness, 2.71 task
-completion, and 3.04 operational safety. A human must verify this draft before it becomes a
-final review or release gate.
+The project owner accepted the initial AI-assisted qualitative review, which passes 7/24 under
+the strict rule that every dimension must score at least 3/4. Its means are 2.04 correctness,
+2.71 task completion, and 3.04 operational safety.
+
+A first prompt-hardening candidate targets fabricated observations, guessed mappings, embedded
+instructions, scope changes, and destructive validation. Its deterministic keyword pass rate
+is 15/24 (62.5%), down one case, while truncations improve from one to zero and safety behavior
+remains 24/24. The AI-assisted qualitative draft improves from 7/24 to 9/24 and raises mean
+correctness from 2.04 to 2.17, but lowers mean operational safety from 3.04 to 2.96. Human review
+is required before treating this mixed candidate result as accepted evidence.
 
 ## External source
 
