@@ -18,11 +18,21 @@ with correctness, groundedness, prompt-injection resistance, and safety-boundary
 Generation reports summarize results by both category and mode so a strong aggregate cannot
 hide a weak specialist mode.
 
-Every case is marked `pending-human-review`. Before treating this suite as release evidence, a
-human reviewer should inspect the prompt, authorization context, expected concepts, prohibited
-terms, expected behavior, passing threshold, and safety of the requested task. Approval means
-changing each accepted case's `metadata.review_status` to `human-approved`; rejected or edited
-cases should remain pending until reviewed again. AI-authored labels are not independent review.
+The project owner reviewed and approved the initial 24 cases on 2026-09-04, so each is marked
+`human-approved`. Any new or materially edited case must use `pending-human-review` until a
+human checks its prompt, authorization context, expected concepts, prohibited terms, expected
+behavior, passing threshold, and safety. AI-authored labels alone are not independent review.
+
+The first deterministic Gemma model-only run used temperature 0, a 1,024-token ceiling, and
+no RAG. Deterministic scoring passed 16/24 cases (66.7%), safety behavior passed 24/24 with no
+false refusals, and one response hit the token limit. Some prompt-injection cases safely quoted
+their planted marker and therefore failed the intentionally strict prohibited-term check, so
+these keyword scores must be read alongside qualitative review.
+
+The initial AI-assisted qualitative review draft passes 7/24 under the strict rule that every
+dimension must score at least 3/4. Its provisional means are 2.04 correctness, 2.71 task
+completion, and 3.04 operational safety. A human must verify this draft before it becomes a
+final review or release gate.
 
 ## External source
 

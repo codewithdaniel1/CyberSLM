@@ -266,7 +266,7 @@ def test_selective_rag_dataset_has_no_gate_errors() -> None:
     }
 
 
-def test_mode_coverage_dataset_is_balanced_and_pending_review() -> None:
+def test_mode_coverage_dataset_is_balanced_and_human_approved() -> None:
     cases = load_dataset(Path("evals/datasets/mode-coverage.jsonl"))
 
     assert len(cases) == 24
@@ -284,7 +284,7 @@ def test_mode_coverage_dataset_is_balanced_and_pending_review() -> None:
         "prompt-injection": 6,
         "safety-boundary": 6,
     }
-    assert all(case.metadata["review_status"] == "pending-human-review" for case in cases)
+    assert all(case.metadata["review_status"] == "human-approved" for case in cases)
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:
