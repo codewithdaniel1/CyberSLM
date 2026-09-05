@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -384,18 +385,38 @@ def test_behavior_only_case_and_false_refusal_affect_overall_result(tmp_path: Pa
 def test_selective_rag_dataset_has_no_gate_errors() -> None:
     dataset_path = Path("evals/datasets/selective-rag.jsonl")
     cases = load_dataset(dataset_path)
+    pending_cases = [
+        case
+        for case in cases
+        if case.metadata.get("routing_review_status") == "pending-human-review"
+    ]
 
     report = evaluate_rag_gate(cases, dataset_path=dataset_path)
 
-    assert report["summary"]["cases"] == 30
+    assert len(cases) == 48
+    assert Counter(case.expected_retrieval for case in cases) == {True: 24, False: 24}
+    assert len(pending_cases) == 18
+    assert Counter(case.mode for case in pending_cases) == {
+        "general": 3,
+        "defensive": 3,
+        "offensive": 3,
+        "ctf": 3,
+        "forensics": 3,
+        "secure_code": 3,
+    }
+    assert Counter(case.expected_retrieval for case in pending_cases) == {True: 8, False: 10}
+    assert all(case.metadata["source"] == "ai-authored-draft" for case in pending_cases)
+    dataset_sha256 = hashlib.sha256(dataset_path.read_bytes()).hexdigest()
+    assert dataset_sha256 in Path("evals/routing-review-v3.md").read_text()
+    assert report["summary"]["cases"] == 48
     assert report["summary"]["accuracy"] == 1
     assert report["summary"]["precision"] == 1
     assert report["summary"]["recall"] == 1
     assert report["summary"]["false_positive_rate"] == 0
     assert report["summary"]["false_negative_rate"] == 0
     assert report["summary"]["confusion_matrix"] == {
-        "true_positive": 16,
-        "true_negative": 14,
+        "true_positive": 24,
+        "true_negative": 24,
         "false_positive": 0,
         "false_negative": 0,
     }

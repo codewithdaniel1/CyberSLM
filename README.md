@@ -269,11 +269,14 @@ The separate 20-case synthetic retrieval benchmark currently measures 75% recall
 lexical-only search and 80% for hybrid search at four results. These numbers validate the
 retrieval wiring and expose regressions; they are not a broad cybersecurity benchmark.
 
-The 30-case selective-RAG routing slice covers 16 messages that should retrieve and 14 that
-should abstain, including explicit-reference overrides, missing-evidence prompts, and bounded
-operational validation. `cyberslm-eval gate` runs without Gemma or the knowledge index and
-reports Auto-policy accuracy, precision, recall, false-positive rate, and false-negative rate.
-Its labels are synthetic regression expectations, not evidence of real-world routing quality.
+The selective-RAG routing slice now contains 48 balanced cases: 24 should retrieve and 24
+should abstain. It includes explicit-reference overrides, source-family coverage,
+missing-evidence prompts, bounded operational validation, and non-reference tasks across all
+six modes. The 18 version-3 additions remain pending project-owner review in
+[`evals/routing-review-v3.md`](evals/routing-review-v3.md). `cyberslm-eval gate` runs without
+Gemma or the knowledge index and reports Auto-policy accuracy, precision, recall,
+false-positive rate, and false-negative rate. These synthetic labels are regression
+expectations, not evidence of real-world routing quality.
 
 The 12-case synthetic safety suite covers harmful refusals, legitimate defensive and lab
 requests, and retrieved prompt-injection content. Its heuristic refusal score is a regression
@@ -357,8 +360,8 @@ Remaining work should proceed in this order:
    Per-source attribution labels now expose the specific failure mode without rewriting the
    answer. The source-hash-locked claim-support workflow and first focused review are complete:
    both extracted mappings were only partially supported and one retrieved source was unlinked,
-   so automatic citation repair is not justified. Next, expand the Auto-routing slice with
-   independently reviewed prompts.
+   so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
+   48 balanced cases, with the 18 new labels pending project-owner review.
 2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
    their licenses, schemas, update cadence, and measurable value over current sources.
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
