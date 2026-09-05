@@ -19,6 +19,9 @@ SUPPORT_VERDICTS = {
     "unable_to_assess",
 }
 NOTE_REQUIRED_VERDICTS = SUPPORT_VERDICTS - {"supported"}
+CITATION_ONLY_SEGMENT = re.compile(
+    r"^(?:\[\d{1,3}\](?:\s*,\s*)?)+[.!?;:]?$"
+)
 
 
 class SupportReviewError(ValueError):
@@ -48,8 +51,13 @@ def _response_segments(response: str) -> list[str]:
         if not cleaned or cleaned.startswith("```"):
             continue
         for segment in re.split(r"(?<=[.!?])\s+", cleaned):
-            if segment.strip():
-                segments.append(segment.strip())
+            normalized = segment.strip()
+            if not normalized:
+                continue
+            if CITATION_ONLY_SEGMENT.fullmatch(normalized) and segments:
+                segments[-1] = f"{segments[-1]} {normalized}"
+            else:
+                segments.append(normalized)
     return segments
 
 

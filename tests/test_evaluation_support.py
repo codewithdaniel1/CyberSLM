@@ -78,6 +78,26 @@ def test_collect_support_candidates_ignores_footer_and_tracks_unlinked_sources()
     ]
 
 
+def test_collect_support_candidates_attaches_trailing_citation_fragments() -> None:
+    first = document()
+    second = {
+        **document(),
+        "id": "attack:T1071.004",
+        "external_id": "T1071.004",
+        "title": "T1071.004 — DNS",
+    }
+
+    candidates = collect_support_candidates(
+        "Use context-aware encoding. [1], [2]\nDo not treat this footer as a claim.",
+        [first, second],
+    )
+
+    assert candidates["claim_count"] == 2
+    assert {claim["text"] for claim in candidates["claims"]} == {
+        "Use context-aware encoding. [1], [2]"
+    }
+
+
 def test_create_and_summarize_support_review(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
     review_path = tmp_path / "support-review.json"
