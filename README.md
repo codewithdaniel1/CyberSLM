@@ -172,7 +172,11 @@ switch: no per-message choice can override it.
 There is no fine-tuning dataset yet. Mode prompts shape behavior, the local knowledge index
 provides factual context, evaluation datasets measure behavior, and private conversations are
 not training data. See [`docs/knowledge.md`](docs/knowledge.md) for the complete data map,
-retrieval behavior, and source attribution.
+retrieval behavior, and source attribution. The bounded review of eight additional source
+families is recorded in
+[`docs/knowledge-source-evaluation.md`](docs/knowledge-source-evaluation.md): OWASP Cheat Sheet
+Series, MITRE D3FEND, and CISA KEV are approved for measured pilots; NVD, OSV, Sigma, EPSS, and
+NIST OSCAL are intentionally deferred to narrower lookup or product modes.
 
 ## Generated C syntax validation
 
@@ -362,8 +366,11 @@ Remaining work should proceed in this order:
    both extracted mappings were only partially supported and one retrieved source was unlinked,
    so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
    48 balanced cases, with all 18 new labels project-owner approved.
-2. **Expand vetted cyber coverage:** add independently versioned sources only after reviewing
-   their licenses, schemas, update cadence, and measurable value over current sources.
+2. **Expand vetted cyber coverage:** source discovery is complete for the current eight-source
+   shortlist. Implement the approved pilots in order—OWASP Cheat Sheet Series, MITRE D3FEND,
+   then CISA KEV—and admit each only after its held-out A/B benchmark shows incremental value.
+   NVD, OSV, Sigma, EPSS, and NIST OSCAL are evaluated and intentionally deferred; see the
+   [decision matrix](docs/knowledge-source-evaluation.md).
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
    corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
 4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
@@ -373,9 +380,8 @@ Remaining work should proceed in this order:
    public-repository provenance attestations are present. Add restoration/migration matrices
    and enable private-repository attestations if the repository moves to Enterprise Cloud.
 
-The immediate next milestone is item 1: evaluate separately labeled attribution assistance
-without rewriting model claims, then expand the routing and grounding evaluation before choosing
-another knowledge source.
+The immediate next milestone is item 2: pilot the OWASP Cheat Sheet Series with pinned
+provenance, attribution, parser tests, and an incremental retrieval benchmark before enabling it.
 
 ## Authorization context
 

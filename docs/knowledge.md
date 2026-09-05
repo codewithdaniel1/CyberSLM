@@ -102,3 +102,8 @@ synchronization times, document counts, and copyright notices are stored in the 
 
 The imported information is provided by its publishers as-is. Retrieval does not guarantee
 correct coverage, and model output must still be verified against the linked source.
+
+The additional-source discovery review is complete. See
+[`knowledge-source-evaluation.md`](knowledge-source-evaluation.md) for the eight-source decision
+matrix, the three approved pilots, deferred integrations, and the admission benchmark required
+before any new source joins the default index.
