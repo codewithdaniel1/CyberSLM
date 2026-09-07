@@ -296,6 +296,46 @@ def test_query_expansion_does_not_short_circuit_complementary_sources(tmp_path: 
     assert {item["source_key"] for item in results} == {"cwe", "owasp"}
 
 
+def test_preferred_pilot_source_promotes_direct_title_match() -> None:
+    class FixedRankStore:
+        def hybrid_search(self, *args, **kwargs) -> list[dict]:
+            del args, kwargs
+            return [
+                {
+                    **document(
+                        "owasp:BUSINESS",
+                        "Business Logic Security Cheat Sheet",
+                        "Authorization checks for workflows and entry points",
+                    ),
+                    "source_key": "owasp",
+                },
+                {
+                    **document(
+                        "owasp:AUTHORIZATION",
+                        "Authorization Cheat Sheet",
+                        "Authorization must be enforced for each request",
+                    ),
+                    "source_key": "owasp",
+                },
+            ]
+
+    store = FixedRankStore()
+    prompt = "How should authorization be enforced on every API request?"
+
+    baseline = retrieve(store, prompt, "general", limit=2, source_keys=("owasp",))
+    preferred = retrieve(
+        store,
+        prompt,
+        "general",
+        limit=2,
+        source_keys=("owasp",),
+        preferred_source_keys=("owasp",),
+    )
+
+    assert baseline[0]["external_id"] == "BUSINESS"
+    assert preferred[0]["external_id"] == "AUTHORIZATION"
+
+
 def test_parse_attack_techniques() -> None:
     payload = {
         "objects": [

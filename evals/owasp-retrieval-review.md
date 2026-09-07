@@ -87,14 +87,30 @@ transparent concept checks in 5/6, and routed all 6/6 cases correctly. Only 1/6 
 every retrieved reference, with 41.7% mean inline-citation coverage. The source-linked claim
 extractor produced 15 candidates across five responses; they still require human support review.
 
-At a one-result limit, only 2/6 intended OWASP documents ranked first and no response used an
-inline citation. This confirms that the four-result depth is currently necessary for the pilot.
+Before routing-aware title preference, only 2/6 intended OWASP documents ranked first and no
+response used an inline citation in the initial one-result model sample.
 The exact-ID attribution score is not suitable for OWASP prose because its `OWASP-CS-*` identifiers
 are internal dataset keys rather than public identifiers shown to the model; inline citation and
 human claim-support review remain the relevant checks.
 
-These six cases are a diagnostic sample, not an admission result. The weak citation consistency,
-pending support review, and pending dataset-label review keep OWASP out of production routing.
+## Routing-aware rank and citation candidate
+
+A routing-aware retrieval mode now measures the same source filtering used by chat. On the full
+24-case pilot, the unmodified hybrid rank placed the intended document first in 18/24 cases. A
+bounded title-topic preference for explicitly enabled pilot sources improved this synthetic slice
+to 24/24 at one result. The preference is inactive unless the caller supplies an opt-in preferred
+source, so normal ATT&CK/CWE/CAPEC retrieval is unchanged.
+
+On the same first six cases, the improved top rank retrieved the intended document in 6/6 cases.
+The production citation prompt cited the single source in only 1/6 responses. An experimental
+strict prompt reached 6/6 but produced four unsupported source links in AI-assisted review. A
+safer case-aware revision cited 4/6 sources and passed 5/6 concept checks. Its AI-assisted draft
+classified 9/11 linked claims as supported and two as partially supported, with none unsupported;
+two responses still used retrieved guidance without an inline citation.
+
+These are small, synthetic, AI-reviewed diagnostics, not an admission result. The case-aware
+worksheet still requires project-owner approval, broader held-out testing is needed, and the
+strict profile remains evaluation-only. OWASP therefore stays out of production routing.
 
 ## Review decision
 

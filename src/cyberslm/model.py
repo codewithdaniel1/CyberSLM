@@ -22,6 +22,16 @@ KNOWLEDGE_PROMPT_INSTRUCTION = (
     "for the specific evidence needed. Cite every claim that actually uses a reference inline "
     "with [1], [2], and so on; if no reference supports the answer, do not cite one."
 )
+STRICT_KNOWLEDGE_PROMPT_INSTRUCTION = (
+    f"{KNOWLEDGE_PROMPT_INSTRUCTION} When using retrieved background, every factual sentence "
+    "derived from it must end with its supporting reference number, such as [1] or [1][2]. "
+    "Cite only a passage that supports the complete sentence. Split sentences that combine "
+    "claims from different sources. Before finalizing, remove unsupported sourced claims and "
+    "check every citation number against the supplied passage. Facts supplied by the user are "
+    "not derived from retrieved background, so do not cite them to a reference. Introduce those "
+    "facts with wording such as 'Given your description' without a citation. Never turn a "
+    "reference's conditional checks into asserted facts about the user's system."
+)
 
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
@@ -30,6 +40,7 @@ class GenerationRequest:
     image_paths: list[Path]
     authorization_context: str = "unspecified"
     knowledge_documents: list[dict[str, Any]] | None = None
+    knowledge_instruction: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,7 +287,7 @@ class MLXGemmaBackend(ModelBackend):
             request.mode.build_system_prompt(request.authorization_context),
         ]
         if request.knowledge_documents:
-            references = [KNOWLEDGE_PROMPT_INSTRUCTION]
+            references = [request.knowledge_instruction or KNOWLEDGE_PROMPT_INSTRUCTION]
             for index, document in enumerate(request.knowledge_documents, start=1):
                 references.append(
                     f"[{index}] {document['title']}\n"

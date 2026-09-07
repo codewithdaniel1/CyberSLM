@@ -212,6 +212,7 @@ class EvaluationRunner:
         embedder: Any | None = None,
         rag_policy: str = "auto",
         additional_source_keys: tuple[str, ...] = (),
+        knowledge_instruction: str = KNOWLEDGE_PROMPT_INSTRUCTION,
     ):
         self.backend = backend
         self.knowledge_store = knowledge_store
@@ -223,6 +224,7 @@ class EvaluationRunner:
             raise ValueError("Knowledge policy must be one of: auto, on, off")
         self.rag_policy = normalized_policy
         self.additional_source_keys = additional_source_keys
+        self.knowledge_instruction = knowledge_instruction
 
     def run(
         self,
@@ -252,6 +254,7 @@ class EvaluationRunner:
                     max_chars=self.rag_max_chars,
                     embedder=self.embedder,
                     source_keys=retrieval_decision.source_keys,
+                    preferred_source_keys=self.additional_source_keys,
                 )
                 if self.knowledge_store and retrieval_decision.should_retrieve
                 else []
@@ -262,6 +265,7 @@ class EvaluationRunner:
                 image_paths=list(case.image_paths),
                 authorization_context=case.authorization_context,
                 knowledge_documents=knowledge_documents,
+                knowledge_instruction=self.knowledge_instruction,
             )
             started = time.perf_counter()
             generation = self.backend.generate_with_metadata(request)
@@ -333,7 +337,7 @@ class EvaluationRunner:
         prompt_bytes = json.dumps(
             {
                 "version": PROMPT_CONTRACT_VERSION,
-                "knowledge_instruction": KNOWLEDGE_PROMPT_INSTRUCTION,
+                "knowledge_instruction": self.knowledge_instruction,
                 "system_prompts": {
                     case.id: get_mode(case.mode).build_system_prompt(case.authorization_context)
                     for case in cases
@@ -356,7 +360,7 @@ class EvaluationRunner:
             "prompt_contract": {
                 "version": PROMPT_CONTRACT_VERSION,
                 "knowledge_instruction_sha256": hashlib.sha256(
-                    KNOWLEDGE_PROMPT_INSTRUCTION.encode()
+                    self.knowledge_instruction.encode()
                 ).hexdigest(),
             },
             "model": self.backend.status,

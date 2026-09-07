@@ -10,6 +10,7 @@ import pytest
 
 from cyberslm.evaluation.cli import build_parser
 from cyberslm.evaluation.compare import compare_reports
+from cyberslm.evaluation.retrieval import evaluate_retrieval
 from cyberslm.evaluation.routing import evaluate_rag_gate
 from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.evaluation.schemas import DatasetError, EvalCase
@@ -198,9 +199,18 @@ def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
     support_args = parser.parse_args(["support-review", "init", "report.json"])
     assert support_args.support_review_command == "init"
     retrieval_args = parser.parse_args(
-        ["retrieve", "--knowledge-db", "/tmp/candidate-knowledge.db"]
+        [
+            "retrieve",
+            "--knowledge-db",
+            "/tmp/candidate-knowledge.db",
+            "--auto-route",
+            "--additional-source",
+            "owasp",
+        ]
     )
     assert retrieval_args.knowledge_db == Path("/tmp/candidate-knowledge.db")
+    assert retrieval_args.auto_route is True
+    assert retrieval_args.additional_source == ["owasp"]
     run_args = parser.parse_args(
         [
             "run",
@@ -212,6 +222,10 @@ def test_eval_cli_defaults_to_auto_and_keeps_no_rag_alias() -> None:
     )
     assert run_args.knowledge_db == Path("/tmp/candidate-knowledge.db")
     assert run_args.additional_source == ["owasp"]
+    assert run_args.citation_guidance == "default"
+    assert parser.parse_args(["run", "--citation-guidance", "strict"]).citation_guidance == (
+        "strict"
+    )
     assert parser.parse_args(["gate", "--additional-source", "owasp"]).additional_source == [
         "owasp"
     ]
@@ -500,6 +514,58 @@ def test_owasp_pilot_routing_can_be_evaluated_without_enabling_production() -> N
     assert report["configuration"]["additional_source_keys"] == ["owasp"]
     assert report["summary"]["recall"] == 1
     assert all("owasp" in case["decision"]["source_keys"] for case in report["cases"])
+
+
+def test_retrieval_evaluation_can_apply_auto_source_routing(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "owasp.jsonl"
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "id": "jwt",
+                "category": "token-security",
+                "mode": "general",
+                "prompt": "How should an API validate a JWT issuer and audience?",
+                "expected_concepts": [["issuer"]],
+                "expected_references": ["OWASP-CS-JSON-WEB-TOKEN-CHEAT-SHEET"],
+                "expected_retrieval": True,
+            }
+        )
+        + "\n"
+    )
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    store.replace_source(
+        source_key="owasp",
+        source_name="OWASP",
+        source_version="pilot",
+        source_url="https://example.test/owasp",
+        source_sha256="abc",
+        notice="Test",
+        documents=[
+            {
+                "id": "owasp:jwt",
+                "external_id": "OWASP-CS-JSON-WEB-TOKEN-CHEAT-SHEET",
+                "title": "JSON Web Token Cheat Sheet",
+                "url": "https://example.test/jwt",
+                "content": "Validate the JWT issuer and audience.",
+            }
+        ],
+    )
+
+    report = evaluate_retrieval(
+        load_dataset(dataset_path),
+        dataset_path=dataset_path,
+        store=store,
+        embedder=None,
+        limit=1,
+        max_chars=2_000,
+        auto_route=True,
+        additional_source_keys=("owasp",),
+    )
+
+    assert report["configuration"]["auto_route"] is True
+    assert report["configuration"]["additional_source_keys"] == ["owasp"]
+    assert report["cases"][0]["routing"]["source_keys"] == ["owasp"]
+    assert report["summary"]["pass_rate"] == 1
 
 
 def test_rag_gate_reports_both_error_rates(tmp_path: Path) -> None:

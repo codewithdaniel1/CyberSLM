@@ -14,7 +14,7 @@ from cyberslm import __version__
 from cyberslm.evaluation.schemas import EvalCase
 from cyberslm.evaluation.scoring import score_retrieval
 from cyberslm.knowledge import KnowledgeStore
-from cyberslm.knowledge.retrieve import QueryEmbedder, retrieve
+from cyberslm.knowledge.retrieve import QueryEmbedder, decide_retrieval, retrieve
 
 
 def evaluate_retrieval(
@@ -25,6 +25,8 @@ def evaluate_retrieval(
     embedder: QueryEmbedder | None,
     limit: int,
     max_chars: int,
+    auto_route: bool = False,
+    additional_source_keys: tuple[str, ...] = (),
     progress: Callable[[int, int, EvalCase], None] | None = None,
 ) -> dict[str, Any]:
     results = []
@@ -32,13 +34,29 @@ def evaluate_retrieval(
         if progress:
             progress(index, len(cases), case)
         started = time.perf_counter()
-        documents = retrieve(
-            store,
-            case.prompt,
-            case.mode,
-            limit=limit,
-            max_chars=max_chars,
-            embedder=embedder,
+        routing = (
+            decide_retrieval(
+                case.prompt,
+                case.mode,
+                "auto",
+                additional_source_keys=additional_source_keys,
+            )
+            if auto_route
+            else None
+        )
+        documents = (
+            retrieve(
+                store,
+                case.prompt,
+                case.mode,
+                limit=limit,
+                max_chars=max_chars,
+                embedder=embedder,
+                source_keys=routing.source_keys if routing else None,
+                preferred_source_keys=additional_source_keys if routing else (),
+            )
+            if routing is None or routing.should_retrieve
+            else []
         )
         latency = time.perf_counter() - started
         evaluation = score_retrieval(case, documents)
@@ -63,6 +81,7 @@ def evaluate_retrieval(
                     }
                     for document in documents
                 ],
+                "routing": routing.metadata(len(documents)) if routing else None,
                 "latency_seconds": round(latency, 4),
                 "evaluation": evaluation,
                 "metadata": case.metadata,
@@ -84,6 +103,8 @@ def evaluate_retrieval(
             "max_chars": max_chars,
             "semantic": embedder is not None,
             "embedding_model": embedder.model_name if embedder else None,
+            "auto_route": auto_route,
+            "additional_source_keys": list(additional_source_keys),
         },
         "knowledge": store.status(),
         "summary": {

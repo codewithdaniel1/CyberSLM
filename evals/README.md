@@ -178,6 +178,9 @@ uv run cyberslm-eval retrieve --lexical-only
 
 Use `--knowledge-db PATH` to compare the same retrieval dataset against isolated baseline and
 candidate indexes without replacing the configured local knowledge database.
+Add `--auto-route` to apply chat's source-family decision before searching. Pilot sources require
+both `--auto-route` and an explicit `--additional-source`; this makes routing-aware rank tests
+possible without enabling the source in the application.
 
 The gate benchmark also runs without a knowledge index. It measures the deterministic Auto
 decision against 24 should-retrieve and 24 should-skip labels, reporting the confusion matrix,
@@ -233,6 +236,9 @@ uv run cyberslm-eval run \
 
 `--additional-source` affects only that evaluation process. It does not add the pilot to normal
 knowledge syncs, background rebuilds, or application routing.
+`--citation-guidance strict` enables an experimental evaluation-only instruction that separates
+user-provided case facts from source-derived guidance and asks the model to validate each inline
+citation. The default remains the production prompt.
 
 Create and summarize a claim-support review for a new RAG report:
 

@@ -13,6 +13,21 @@ EXPLICIT_REFERENCE = re.compile(
 IDENTIFIER = re.compile(r"\b(?:CWE-\d+|CAPEC-\d+|T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
 ATTACK_SUBTECHNIQUE = re.compile(r"^(T\d{4})\.\d{3}$", re.IGNORECASE)
 RAG_POLICIES = frozenset({"auto", "on", "off"})
+GENERIC_TITLE_TOKENS = frozenset(
+    {
+        "cheat",
+        "sheet",
+        "security",
+        "prevention",
+        "request",
+        "server",
+        "side",
+        "cwe",
+        "capec",
+        "attack",
+        "improper",
+    }
+)
 
 EVIDENCE_GAP_SIGNAL = re.compile(
     r"\b(?:no|without|missing|lacks?|not provided|not shown)\b[^.]{0,240}"
@@ -187,6 +202,47 @@ class QueryEmbedder(Protocol):
     def embed_query(self, query: str) -> list[float]: ...
 
 
+def _topic_tokens(value: str) -> set[str]:
+    tokens: set[str] = set()
+    for token in re.findall(r"[a-z0-9]+", value.casefold()):
+        if token in GENERIC_TITLE_TOKENS or token.isdigit():
+            continue
+        if len(token) > 4 and token.endswith("ies"):
+            token = f"{token[:-3]}y"
+        elif len(token) > 4 and token.endswith("es"):
+            token = token[:-2]
+        elif len(token) > 3 and token.endswith("s"):
+            token = token[:-1]
+        tokens.add(token)
+    return tokens
+
+
+def _prefer_title_match(
+    prompt: str,
+    results: list[dict],
+    preferred_source_keys: tuple[str, ...],
+) -> list[dict]:
+    """Promote one directly named pilot topic while preserving the remaining rank order."""
+    if not preferred_source_keys or len(results) < 2:
+        return results
+    prompt_tokens = _topic_tokens(prompt)
+    preferred = set(preferred_source_keys)
+    candidates: list[tuple[int, int]] = []
+    for index, item in enumerate(results):
+        if item["source_key"] not in preferred:
+            continue
+        title_tokens = _topic_tokens(item["title"])
+        overlap = prompt_tokens & title_tokens
+        if overlap:
+            candidates.append((len(overlap), -index))
+    if not candidates:
+        return results
+    best_index = -max(candidates)[1]
+    if best_index == 0:
+        return results
+    return [results[best_index], *results[:best_index], *results[best_index + 1 :]]
+
+
 def expanded_query(prompt: str) -> str:
     lowered = prompt.casefold()
     additions: list[str] = []
@@ -235,6 +291,7 @@ def retrieve(
     max_chars: int = 16_000,
     embedder: QueryEmbedder | None = None,
     source_keys: tuple[str, ...] | None = None,
+    preferred_source_keys: tuple[str, ...] = (),
 ) -> list[dict]:
     selected_source_keys = source_keys or {
         "secure_code": ("cwe",),
@@ -261,14 +318,16 @@ def retrieve(
                 query_vector = embedder.embed_query(query)
             except (RuntimeError, ValueError, OSError):
                 query_vector = None
+    candidate_limit = max(limit, 4) if preferred_source_keys else limit
     results = store.hybrid_search(
         query,
         query_vector,
         embedder.model_name if embedder else "",
-        limit=limit,
+        limit=candidate_limit,
         max_chars=None,
         source_keys=selected_source_keys,
     )
+    results = _prefer_title_match(prompt, results, preferred_source_keys)
     first_subtechnique = next(
         (
             ATTACK_SUBTECHNIQUE.match(item["external_id"])

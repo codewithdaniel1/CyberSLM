@@ -150,6 +150,10 @@ for that run:
 uv run cyberslm-eval gate \
   --dataset evals/datasets/owasp-retrieval-pilot.jsonl \
   --additional-source owasp
+uv run cyberslm-eval retrieve \
+  --dataset evals/datasets/owasp-retrieval-pilot.jsonl \
+  --knowledge-db /path/to/candidate-knowledge.db \
+  --auto-route --additional-source owasp --limit 1
 uv run cyberslm-eval run \
   --dataset evals/datasets/owasp-retrieval-pilot.jsonl \
   --backend mlx --temperature 0 --rag-policy auto \
@@ -398,11 +402,12 @@ Remaining work should proceed in this order:
    shortlist. The pinned, opt-in OWASP Cheat Sheet parser is implemented and its pending-review
    24-case retrieval slice improves both lexical and hybrid recall from 0/24 to 24/24. Isolated
    pilot routing passes all 24 source-specific cases and preserves all 48 existing balanced gate
-   decisions. A six-case Gemma sample retrieves the intended sheet in 6/6 at the normal
-   four-result depth, but only 1/6 answers cites every retrieved reference (41.7% mean citation
-   coverage), so label approval and human claim-support review remain before admission. Then
-   implement MITRE D3FEND and CISA KEV. Admit each only after its held-out A/B benchmark shows
-   incremental value.
+   decisions. Routing-aware title preference improves top-one retrieval on the synthetic pilot
+   from 18/24 to 24/24 while remaining inactive for normal sources. A six-case case-aware citation
+   experiment retrieves the intended sheet in 6/6 and has no unsupported linked claims in its
+   AI-assisted draft, but two answers omit citations and the draft still needs project-owner
+   approval. Then implement MITRE D3FEND and CISA KEV. Admit each only after its held-out A/B
+   benchmark shows incremental value.
    NVD, OSV, Sigma, EPSS, and NIST OSCAL are evaluated and intentionally deferred; see the
    [decision matrix](docs/knowledge-source-evaluation.md).
 3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed

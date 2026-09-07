@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from cyberslm.model import GenerationCancelled, GenerationRequest, MLXGemmaBackend, MockBackend
+from cyberslm.model import (
+    STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
+    GenerationCancelled,
+    GenerationRequest,
+    MLXGemmaBackend,
+    MockBackend,
+)
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
 
@@ -112,3 +118,26 @@ def test_model_prompt_and_response_include_local_references() -> None:
     assert "inline citations: 0/1; exact-ID citations: 0/1" in response
     assert "— not explicitly referenced" in response
     assert "https://attack.mitre.org/techniques/T1110/" in response
+
+
+def test_model_prompt_can_use_isolated_strict_citation_guidance() -> None:
+    request = GenerationRequest(
+        mode=MODES["general"],
+        messages=[{"role": "user", "content": "Explain the control"}],
+        image_paths=[],
+        knowledge_documents=[
+            {
+                "title": "Reference",
+                "url": "https://example.test/reference",
+                "content": "Supporting content",
+                "source_key": "test",
+                "source_version": "1",
+            }
+        ],
+        knowledge_instruction=STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
+    )
+
+    prompt = MLXGemmaBackend._build_prompt(request)
+
+    assert "every factual sentence" in prompt
+    assert "check every citation number" in prompt

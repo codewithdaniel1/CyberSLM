@@ -23,7 +23,11 @@ from cyberslm.evaluation.support import (
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.knowledge.embeddings import LocalEmbedder
 from cyberslm.knowledge.sources import PILOT_SOURCES
-from cyberslm.model import create_backend
+from cyberslm.model import (
+    KNOWLEDGE_PROMPT_INSTRUCTION,
+    STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
+    create_backend,
+)
 
 DEFAULT_DATASET = Path("evals/datasets/smoke.jsonl")
 DEFAULT_RETRIEVAL_DATASET = Path("evals/datasets/retrieval.jsonl")
@@ -56,6 +60,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     retrieval.add_argument("--limit", type=int, default=settings.rag_results)
     retrieval.add_argument("--lexical-only", action="store_true")
+    retrieval.add_argument(
+        "--auto-route",
+        action="store_true",
+        help="Apply the same Auto source routing used by chat before retrieval",
+    )
+    retrieval.add_argument(
+        "--additional-source",
+        action="append",
+        choices=tuple(PILOT_SOURCES),
+        default=[],
+        help="Include an opt-in pilot source in Auto routing (repeatable)",
+    )
 
     gate = subparsers.add_parser(
         "gate", help="Evaluate Auto RAG routing without a model or knowledge index"
@@ -104,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=tuple(PILOT_SOURCES),
         default=[],
         help="Include an opt-in pilot source in Auto RAG routing (repeatable)",
+    )
+    run.add_argument(
+        "--citation-guidance",
+        choices=("default", "strict"),
+        default="default",
+        help="Retrieved-source citation instruction profile (default: production prompt)",
     )
     run.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
 
@@ -211,6 +233,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "retrieve":
+        if args.additional_source and not args.auto_route:
+            raise SystemExit("--additional-source requires --auto-route for retrieval evaluation")
         cases = load_dataset(args.dataset)
         store = KnowledgeStore(args.knowledge_db)
         if not store.status()["ready"]:
@@ -228,6 +252,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 embedder=retrieval_embedder,
                 limit=max(1, args.limit),
                 max_chars=settings.rag_max_chars,
+                auto_route=args.auto_route,
+                additional_source_keys=tuple(args.additional_source),
                 progress=lambda index, total, case: print(
                     f"[{index}/{total}] {case.id} ({case.mode})", flush=True
                 ),
@@ -302,6 +328,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         embedder=embedder,
         rag_policy=args.rag_policy,
         additional_source_keys=tuple(args.additional_source),
+        knowledge_instruction=(
+            STRICT_KNOWLEDGE_PROMPT_INSTRUCTION
+            if args.citation_guidance == "strict"
+            else KNOWLEDGE_PROMPT_INSTRUCTION
+        ),
     ).run(
         cases,
         dataset_path=args.dataset,
@@ -316,6 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "rag_results": args.rag_results,
             "knowledge_database_path": str(args.knowledge_db),
             "additional_source_keys": list(args.additional_source),
+            "citation_guidance": args.citation_guidance,
             "rag_semantic_enabled": embedder is not None,
             "rag_embedding_model": embedder.model_name if embedder else None,
         },
