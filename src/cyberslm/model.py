@@ -213,6 +213,10 @@ def source_footer(
 
 
 class ModelBackend(ABC):
+    def load(self) -> None:
+        """Load model resources without generating a response."""
+        return None
+
     @abstractmethod
     def generate(self, request: GenerationRequest) -> str:
         raise NotImplementedError
@@ -307,6 +311,10 @@ class MLXGemmaBackend(ModelBackend):
                 "license on Hugging Face if requested, and verify the model ID. "
                 f"Original error: {self._load_error}"
             ) from exc
+
+    def load(self) -> None:
+        with self._lock:
+            self._load()
 
     @staticmethod
     def _build_prompt(request: GenerationRequest) -> str:
@@ -516,6 +524,10 @@ class TransformersGemmaBackend(ModelBackend):
                 "Face if requested, and verify the model ID, device, and quantization mode. "
                 f"Original error: {self._load_error}"
             ) from exc
+
+    def load(self) -> None:
+        with self._lock:
+            self._load()
 
     def _prepare_inputs(self, request: GenerationRequest) -> tuple[dict[str, Any], int]:
         from PIL import Image

@@ -170,6 +170,32 @@ compare 8-bit and 4-bit output against that control before choosing either for r
 the [official Transformers quantization guidance](https://huggingface.co/docs/transformers/quantization/bitsandbytes)
 for current platform and hardware support.
 
+### Full-model benchmark
+
+Use the same six-case cyber suite to measure the full model on each target computer. The command
+loads the model before timing generation, disables RAG to isolate model performance, preserves
+the responses and quality scores, and records load time, tokens per second, model footprint,
+process memory, operating system, hardware architecture, and package versions:
+
+```bash
+uv run cyberslm-benchmark --backend transformers --quantization none --label linux-control
+uv run cyberslm-benchmark --backend transformers --quantization 8bit --label linux-8bit
+uv run cyberslm-benchmark --backend transformers --quantization 4bit --label linux-4bit
+```
+
+The same commands work in PowerShell. On Apple Silicon, benchmark the optimized MLX runtime with:
+
+```bash
+uv run cyberslm-benchmark --backend mlx --label apple-mlx
+```
+
+Reports are written beneath `evals/results/` with a content hash and are ignored by Git because
+they can contain complete model responses and machine details. Keep the dataset, model revision,
+device, and token limit unchanged when comparing modes. The automatic concept score is a useful
+regression signal, but it does not replace the human correctness and safety review described in
+[`evals/review-rubric.md`](evals/review-rubric.md). The full Gemma checkpoint is gated and large;
+the first benchmark may require Hugging Face access and a substantial download.
+
 ## Cyber knowledge and RAG
 
 CyberSLM stores downloaded ATT&CK/CWE/CAPEC snapshots and its searchable index under

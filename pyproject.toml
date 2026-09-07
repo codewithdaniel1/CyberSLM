@@ -9,6 +9,7 @@ dependencies = [
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "pillow>=11,<13",
+  "psutil>=5.9,<8",
   "python-dotenv>=1.1,<2",
   "python-multipart>=0.0.20,<1",
   "streamlit>=1.48,<2",
@@ -17,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 cyberslm-backup = "cyberslm.backup:main"
+cyberslm-benchmark = "cyberslm.benchmark:main"
 cyberslm-eval = "cyberslm.evaluation.cli:main"
 cyberslm-knowledge = "cyberslm.knowledge.cli:main"
 cyberslm-train = "cyberslm.training.cli:main"
