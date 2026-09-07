@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty
 from typing import Any
 
 from cyberslm.config import Settings
@@ -32,6 +33,7 @@ STRICT_KNOWLEDGE_PROMPT_INSTRUCTION = (
     "facts with wording such as 'Given your description' without a citation. Never turn a "
     "reference's conditional checks into asserted facts about the user's system."
 )
+MODEL_BACKEND_NAMES = ("mlx", "transformers", "mock")
 
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
@@ -63,6 +65,33 @@ class GenerationOutput:
 
 class GenerationCancelled(RuntimeError):
     """Raised when a caller cancels generation between streamed tokens."""
+
+
+def build_model_prompt(request: GenerationRequest) -> str:
+    """Build the backend-independent CyberSLM transcript and RAG context."""
+    transcript: list[str] = [
+        request.mode.build_system_prompt(request.authorization_context),
+    ]
+    if request.knowledge_documents:
+        references = [request.knowledge_instruction or KNOWLEDGE_PROMPT_INSTRUCTION]
+        for index, document in enumerate(request.knowledge_documents, start=1):
+            references.append(
+                f"[{index}] {document['title']}\n"
+                f"Source: {document['source_key']} {document['source_version']}\n"
+                f"URL: {document['url']}\n{document['content']}"
+            )
+        references.append("END RETRIEVED BACKGROUND")
+        transcript.append("\n\n".join(references))
+    transcript.append("\nConversation:")
+    for message in request.messages:
+        speaker = "Analyst" if message["role"] == "user" else "CyberSLM"
+        attachment_note = ""
+        if message.get("attachments"):
+            names = ", ".join(item["name"] for item in message["attachments"])
+            attachment_note = f" [Attached image(s): {names}]"
+        transcript.append(f"{speaker}{attachment_note}: {message['content']}")
+    transcript.append("CyberSLM:")
+    return "\n\n".join(transcript)
 
 
 def inline_citation_numbers(response: str) -> set[int]:
@@ -220,8 +249,8 @@ class MockBackend(ModelBackend):
         response = (
             f"**Mock {request.mode.name} response**\n\n"
             f"CyberSLM received: “{user_message[:300]}”{image_note}\n\n"
-            "The application path is working. Set `CYBERSLM_MODEL_BACKEND=mlx` "
-            "to generate a real local response with Gemma."
+            "The application path is working. Use the `mlx` backend on Apple Silicon or the "
+            "`transformers` backend on Linux and Windows for real local Gemma responses."
         )
         return response + source_footer(request.knowledge_documents, response)
 
@@ -283,29 +312,7 @@ class MLXGemmaBackend(ModelBackend):
     def _build_prompt(request: GenerationRequest) -> str:
         # Keeping history inside one user turn works consistently across mlx-vlm releases and
         # allows the helper to insert the exact Gemma multimodal tokens around current images.
-        transcript: list[str] = [
-            request.mode.build_system_prompt(request.authorization_context),
-        ]
-        if request.knowledge_documents:
-            references = [request.knowledge_instruction or KNOWLEDGE_PROMPT_INSTRUCTION]
-            for index, document in enumerate(request.knowledge_documents, start=1):
-                references.append(
-                    f"[{index}] {document['title']}\n"
-                    f"Source: {document['source_key']} {document['source_version']}\n"
-                    f"URL: {document['url']}\n{document['content']}"
-                )
-            references.append("END RETRIEVED BACKGROUND")
-            transcript.append("\n\n".join(references))
-        transcript.append("\nConversation:")
-        for message in request.messages:
-            speaker = "Analyst" if message["role"] == "user" else "CyberSLM"
-            attachment_note = ""
-            if message.get("attachments"):
-                names = ", ".join(item["name"] for item in message["attachments"])
-                attachment_note = f" [Attached image(s): {names}]"
-            transcript.append(f"{speaker}{attachment_note}: {message['content']}")
-        transcript.append("CyberSLM:")
-        return "\n\n".join(transcript)
+        return build_model_prompt(request)
 
     def generate(self, request: GenerationRequest) -> str:
         return self.generate_with_metadata(request).text
@@ -400,9 +407,251 @@ class MLXGemmaBackend(ModelBackend):
         }
 
 
+class TransformersGemmaBackend(ModelBackend):
+    """Lazy local Gemma 3 backend for PyTorch-supported Linux, Windows, and macOS hosts."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self._model: Any = None
+        self._processor: Any = None
+        self._device: str | None = None
+        self._dtype: Any = None
+        self._load_error: str | None = None
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _select_device(torch: Any, requested: str) -> str:
+        requested = requested.strip().lower()
+        if requested == "auto":
+            if torch.cuda.is_available():
+                return "cuda"
+            mps = getattr(torch.backends, "mps", None)
+            if mps is not None and mps.is_available():
+                return "mps"
+            return "cpu"
+        if requested == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("CUDA was requested but is not available to PyTorch.")
+        if requested == "mps":
+            mps = getattr(torch.backends, "mps", None)
+            if mps is None or not mps.is_available():
+                raise RuntimeError("MPS was requested but is not available to PyTorch.")
+        if requested not in {"cpu", "cuda", "mps"}:
+            raise RuntimeError(
+                "CYBERSLM_TRANSFORMERS_DEVICE must be auto, cpu, cuda, or mps."
+            )
+        return requested
+
+    @staticmethod
+    def _select_dtype(torch: Any, device: str) -> Any:
+        if device == "cuda":
+            supports_bfloat16 = getattr(torch.cuda, "is_bf16_supported", lambda: False)
+            return torch.bfloat16 if supports_bfloat16() else torch.float16
+        if device == "mps":
+            return torch.float16
+        return torch.float32
+
+    def _load(self) -> None:
+        if self._model is not None:
+            return
+        if self.settings.adapter_path is not None:
+            raise RuntimeError(
+                "CYBERSLM_ADAPTER_PATH currently supports only the MLX backend. "
+                "Unset it before using the transformers backend."
+            )
+        try:
+            import torch
+            from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+
+            self._device = self._select_device(torch, self.settings.transformers_device)
+            self._dtype = self._select_dtype(torch, self._device)
+            self._processor = AutoProcessor.from_pretrained(self.settings.model_id)
+            self._model = Gemma3ForConditionalGeneration.from_pretrained(
+                self.settings.model_id,
+                dtype=self._dtype,
+            )
+            self._model.to(self._device)
+            self._model.eval()
+            self._load_error = None
+        except Exception as exc:  # pragma: no cover - depends on optional runtime/model
+            self._load_error = f"{type(exc).__name__}: {exc}"
+            raise RuntimeError(
+                "Unable to load the local Transformers model. Install the portable runtime "
+                "with `uv sync --extra transformers`, accept the Gemma license on Hugging "
+                "Face if requested, and verify the model ID. "
+                f"Original error: {self._load_error}"
+            ) from exc
+
+    def _prepare_inputs(self, request: GenerationRequest) -> tuple[dict[str, Any], int]:
+        from PIL import Image
+
+        content: list[dict[str, Any]] = [
+            {"type": "image"} for _path in request.image_paths
+        ]
+        content.append({"type": "text", "text": build_model_prompt(request)})
+        prompt = self._processor.apply_chat_template(
+            [{"role": "user", "content": content}],
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+        images = []
+        for path in request.image_paths:
+            with Image.open(path) as image:
+                images.append(image.convert("RGB"))
+        encoded = self._processor(
+            text=prompt,
+            images=images or None,
+            return_tensors="pt",
+        )
+        prepared: dict[str, Any] = {}
+        for key, value in encoded.items():
+            if value.is_floating_point():
+                prepared[key] = value.to(device=self._device, dtype=self._dtype)
+            else:
+                prepared[key] = value.to(self._device)
+        return prepared, int(prepared["input_ids"].shape[-1])
+
+    def generate(self, request: GenerationRequest) -> str:
+        return self.generate_with_metadata(request).text
+
+    def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
+        metadata: dict[str, Any] = {}
+        text = "".join(self._stream(request, completed=metadata.update))
+        return GenerationOutput(
+            text=text,
+            finish_reason=metadata.get("finish_reason", "unknown"),
+            prompt_tokens=metadata.get("prompt_tokens"),
+            generated_tokens=metadata.get("generated_tokens"),
+            max_tokens=self.settings.max_tokens,
+        )
+
+    def stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        yield from self._stream(request, cancelled=cancelled)
+
+    def _stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+        completed: Callable[[dict[str, Any]], None] | None = None,
+    ) -> Iterator[str]:
+        if cancelled and cancelled():
+            raise GenerationCancelled
+        with self._lock:
+            self._load()
+            try:
+                import torch
+                from transformers import (
+                    StoppingCriteria,
+                    StoppingCriteriaList,
+                    TextIteratorStreamer,
+                )
+
+                backend_cancelled = cancelled
+
+                class CancellationCriteria(StoppingCriteria):
+                    def __call__(self, input_ids: Any, scores: Any, **kwargs: Any) -> bool:
+                        return bool(backend_cancelled and backend_cancelled())
+
+                inputs, prompt_tokens = self._prepare_inputs(request)
+                streamer = TextIteratorStreamer(
+                    self._processor.tokenizer,
+                    skip_prompt=True,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False,
+                    timeout=0.25,
+                )
+                generation: dict[str, Any] = {
+                    **inputs,
+                    "streamer": streamer,
+                    "max_new_tokens": self.settings.max_tokens,
+                    "do_sample": self.settings.temperature > 0,
+                    "stopping_criteria": StoppingCriteriaList([CancellationCriteria()]),
+                    "return_dict_in_generate": True,
+                }
+                if self.settings.temperature > 0:
+                    generation["temperature"] = self.settings.temperature
+
+                result: dict[str, Any] = {}
+                errors: list[Exception] = []
+
+                def run_generation() -> None:
+                    try:
+                        with torch.inference_mode():
+                            result["value"] = self._model.generate(**generation)
+                    except Exception as exc:  # pragma: no cover - runtime-specific
+                        errors.append(exc)
+                        streamer.on_finalized_text("", stream_end=True)
+
+                worker = threading.Thread(target=run_generation, daemon=True)
+                worker.start()
+                emitted_text: list[str] = []
+                while True:
+                    try:
+                        piece = next(streamer)
+                    except Empty:
+                        if worker.is_alive():
+                            continue
+                        break
+                    except StopIteration:
+                        break
+                    if piece:
+                        emitted_text.append(piece)
+                        yield piece
+                worker.join()
+                if errors:
+                    raise errors[0]
+                if cancelled and cancelled():
+                    raise GenerationCancelled
+
+                output = result.get("value")
+                generated_tokens = 0
+                if output is not None:
+                    generated_tokens = max(0, int(output.sequences.shape[-1]) - prompt_tokens)
+                finish_reason = (
+                    "length" if generated_tokens >= self.settings.max_tokens else "stop"
+                )
+                if completed is not None:
+                    completed(
+                        {
+                            "finish_reason": finish_reason,
+                            "prompt_tokens": prompt_tokens,
+                            "generated_tokens": generated_tokens,
+                        }
+                    )
+                if not emitted_text:
+                    empty_response = "The model returned an empty response."
+                    emitted_text.append(empty_response)
+                    yield empty_response
+                footer = source_footer(request.knowledge_documents, "".join(emitted_text))
+                if footer:
+                    yield footer
+            except GenerationCancelled:
+                raise
+            except Exception as exc:  # pragma: no cover - optional runtime/model
+                raise RuntimeError(f"Local generation failed: {type(exc).__name__}: {exc}") from exc
+
+    @property
+    def status(self) -> dict[str, Any]:
+        dtype = str(self._dtype).removeprefix("torch.") if self._dtype is not None else None
+        return {
+            "backend": "transformers",
+            "loaded": self._model is not None,
+            "model_id": self.settings.model_id,
+            "device": self._device or self.settings.transformers_device,
+            "dtype": dtype,
+            "adapter_path": None,
+            "error": self._load_error,
+        }
+
+
 def create_backend(settings: Settings) -> ModelBackend:
     if settings.model_backend == "mock":
         return MockBackend()
     if settings.model_backend == "mlx":
         return MLXGemmaBackend(settings)
+    if settings.model_backend == "transformers":
+        return TransformersGemmaBackend(settings)
     raise ValueError(f"Unsupported CYBERSLM_MODEL_BACKEND: {settings.model_backend}")

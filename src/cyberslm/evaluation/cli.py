@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from cyberslm.config import settings
+from cyberslm.config import default_model_id, settings
 from cyberslm.evaluation.compare import compare_reports, comparison_markdown, load_report
 from cyberslm.evaluation.importer import sync_source as sync_evaluation_source
 from cyberslm.evaluation.retrieval import evaluate_retrieval, finalize_report
@@ -25,6 +25,7 @@ from cyberslm.knowledge.embeddings import LocalEmbedder
 from cyberslm.knowledge.sources import PILOT_SOURCES
 from cyberslm.model import (
     KNOWLEDGE_PROMPT_INSTRUCTION,
+    MODEL_BACKEND_NAMES,
     STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
     create_backend,
 )
@@ -89,8 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="Run a model against an evaluation dataset")
     run.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     run.add_argument("--output", type=Path)
-    run.add_argument("--backend", choices=("mlx", "mock"), default=settings.model_backend)
-    run.add_argument("--model", default=settings.model_id)
+    run.add_argument("--backend", choices=MODEL_BACKEND_NAMES, default=settings.model_backend)
+    run.add_argument("--model", default=None)
     run.add_argument("--max-tokens", type=int, default=settings.max_tokens)
     run.add_argument("--temperature", type=float, default=0.0)
     rag_policy = run.add_mutually_exclusive_group()
@@ -300,10 +301,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     cases = load_dataset(args.dataset)
     if args.limit > 0:
         cases = cases[: args.limit]
+    model_id = args.model or (
+        settings.model_id
+        if args.backend == settings.model_backend
+        else default_model_id(args.backend)
+    )
     run_settings = replace(
         settings,
         model_backend=args.backend,
-        model_id=args.model,
+        model_id=model_id,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
     )
@@ -338,7 +344,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         dataset_path=args.dataset,
         configuration={
             "backend": args.backend,
-            "model_id": args.model,
+            "model_id": model_id,
             "max_tokens": args.max_tokens,
             "temperature": args.temperature,
             "limit": args.limit or None,

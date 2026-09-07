@@ -27,10 +27,11 @@ background rebuilds.
 
 Work should proceed in this order:
 
-1. **Add cross-platform local inference.** Keep MLX acceleration on Apple Silicon, define a
-   backend interface, add a local backend suitable for Linux and Windows, add PowerShell and
-   portable launch/setup paths, update the doctor command, and exercise supported platforms in
-   CI. Do not add a required hosted-model service.
+1. **Finish cross-platform local inference.** The shared backend contract, lazy local
+   PyTorch/Transformers Gemma runtime, automatic device selection, Linux-aware setup, Windows
+   PowerShell launch/setup paths, and Linux/Windows CI contract checks are implemented. Validate
+   a real model smoke test on Linux and Windows hardware. Keep MLX acceleration on Apple Silicon
+   and do not add a required hosted-model service.
 2. **Broaden model-quality evaluation.** Add independently sourced coverage beyond the current
    false-refusal suite, use the existing non-executing compiler check for generated C candidates,
    and retain human review for correctness and operational safety.

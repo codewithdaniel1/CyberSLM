@@ -1,13 +1,34 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+import platform
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
+
+DEFAULT_MLX_MODEL_ID = "mlx-community/gemma-3-4b-it-4bit"
+DEFAULT_TRANSFORMERS_MODEL_ID = "google/gemma-3-4b-it"
+
+
+def default_model_backend() -> str:
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        return "mlx"
+    return "transformers"
+
+
+def default_model_id(backend: str) -> str:
+    if backend == "transformers":
+        return DEFAULT_TRANSFORMERS_MODEL_ID
+    return DEFAULT_MLX_MODEL_ID
+
+
+def _configured_model_backend() -> str:
+    configured = os.getenv("CYBERSLM_MODEL_BACKEND", "auto").strip().lower()
+    return default_model_backend() if configured in {"", "auto"} else configured
 
 
 def _int_env(name: str, default: int) -> int:
@@ -40,8 +61,9 @@ class Settings:
     knowledge_dir: Path = PROJECT_ROOT / "data" / "knowledge"
     knowledge_database_path: Path = PROJECT_ROOT / "data" / "knowledge" / "knowledge.db"
     embedding_cache_dir: Path = PROJECT_ROOT / "data" / "knowledge" / "models"
-    model_backend: str = os.getenv("CYBERSLM_MODEL_BACKEND", "mlx").lower()
-    model_id: str = os.getenv("CYBERSLM_MODEL_ID", "mlx-community/gemma-3-4b-it-4bit")
+    model_backend: str = field(default_factory=_configured_model_backend)
+    model_id: str = field(default_factory=lambda: os.getenv("CYBERSLM_MODEL_ID", "").strip())
+    transformers_device: str = os.getenv("CYBERSLM_TRANSFORMERS_DEVICE", "auto").lower()
     adapter_path: Path | None = (
         Path(value).expanduser().resolve()
         if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
@@ -64,6 +86,14 @@ class Settings:
     code_validation_enabled: bool = _bool_env("CYBERSLM_CODE_VALIDATION_ENABLED", True)
     c_compiler: str | None = os.getenv("CYBERSLM_C_COMPILER", "").strip() or None
     code_validation_timeout: float = _float_env("CYBERSLM_CODE_VALIDATION_TIMEOUT", 4.0)
+
+    def __post_init__(self) -> None:
+        backend = self.model_backend.strip().lower()
+        if backend in {"", "auto"}:
+            backend = default_model_backend()
+        object.__setattr__(self, "model_backend", backend)
+        if not self.model_id.strip():
+            object.__setattr__(self, "model_id", default_model_id(backend))
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

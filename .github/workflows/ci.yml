@@ -52,3 +52,41 @@ jobs:
 
       - name: Build distribution
         run: uv build
+
+  portable-runtime:
+    name: Portable runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CYBERSLM_MODEL_BACKEND: transformers
+      CYBERSLM_MODEL_ID: google/gemma-3-4b-it
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install portable runtime
+        run: uv sync --locked --extra dev --extra transformers
+
+      - name: Verify lazy backend
+        run: uv run python -c "from cyberslm.config import settings; from cyberslm.model import create_backend; backend = create_backend(settings); assert backend.status['backend'] == 'transformers'; import torch, transformers; print(torch.__version__, transformers.__version__)"
+
+      - name: Validate PowerShell launchers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $null = [scriptblock]::Create((Get-Content -Raw ./setup.ps1))
+          $null = [scriptblock]::Create((Get-Content -Raw ./start.ps1))
+
+      - name: Test model and API contracts
+        run: uv run pytest tests/test_model.py tests/test_api.py

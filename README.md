@@ -1,8 +1,9 @@
 # CyberSLM
 
-CyberSLM is a private, local-first multimodal cybersecurity assistant built for Apple
-Silicon. Version 0.5 runs a 4-bit Gemma 3 4B model through MLX, provides a Streamlit chat
-interface, accepts screenshots, and persists multiple conversations in SQLite.
+CyberSLM is a private, local-first multimodal cybersecurity assistant. Version 0.5 runs Gemma
+3 4B through MLX on Apple Silicon or an optional PyTorch/Transformers runtime on Linux and
+Windows, provides a Streamlit chat interface, accepts screenshots, and persists multiple
+conversations in SQLite.
 
 ## What works in v0.5
 
@@ -25,7 +26,8 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 - Retrieval/citation/safety metrics, including a licensed 750-case false-refusal suite
 - Source-hash-locked human review for response quality and retrieved-claim support
 - Verified source manifests with expected SHA-256 hashes and document counts
-- GitHub Actions CI across Python 3.11-3.13 plus wheel/source-package validation
+- GitHub Actions CI across Python 3.11-3.13, Linux/Windows portable-runtime checks, and package
+  validation
 - Tag-driven GitHub Releases with checksums and public-repository provenance attestations
 - Consistent SQLite/upload backups with integrity checks and a SHA-256 manifest
 - Localhost-only defaults; no telemetry or hosted model API
@@ -33,15 +35,18 @@ interface, accepts screenshots, and persists multiple conversations in SQLite.
 
 ## Requirements
 
-- Apple Silicon Mac (M1 or newer); 16 GB unified memory is suitable for the default model
-- macOS
+- Apple Silicon Mac (recommended), Linux, or Windows
+- 16 GB unified memory is suitable for the 4-bit MLX model; the portable unquantized runtime
+  may require more system or GPU memory
 - [`uv`](https://docs.astral.sh/uv/)
-- Roughly 5 GB of free disk space for the environment and model cache
+- Roughly 5 GB free for the MLX path; allow substantially more for PyTorch and unquantized Gemma
 
 The setup pins Python 3.12 because the system Python may be newer than the MLX ecosystem
 currently supports.
 
 ## Quick start
+
+macOS and Linux:
 
 ```bash
 ./setup.sh
@@ -50,9 +55,23 @@ uv run cyberslm-knowledge verify
 ./start.sh
 ```
 
-Open <http://localhost:8501>. The first real prompt downloads and loads
-`mlx-community/gemma-3-4b-it-4bit`, so it can take several minutes. Later starts reuse the
-Hugging Face cache.
+Windows PowerShell:
+
+```powershell
+./setup.ps1
+uv run cyberslm-knowledge sync
+uv run cyberslm-knowledge verify
+./start.ps1
+```
+
+Open <http://localhost:8501>. The first real prompt downloads and loads the backend's Gemma 3
+model, so it can take several minutes. Later starts reuse the Hugging Face cache. `auto` selects
+MLX with `mlx-community/gemma-3-4b-it-4bit` on Apple Silicon and Transformers with
+`google/gemma-3-4b-it` elsewhere.
+
+Existing clones whose `.env` explicitly says `CYBERSLM_MODEL_BACKEND=mlx` keep that choice.
+Set the backend to `auto` and clear `CYBERSLM_MODEL_ID`, or select `transformers` and
+`google/gemma-3-4b-it`, before moving that installation to Linux or Windows.
 
 Gemma access is governed by Google's Gemma terms. If Hugging Face requests authentication,
 accept the model license on its model page and run `huggingface-cli login` locally.
@@ -65,8 +84,8 @@ Edit `.env`:
 CYBERSLM_MODEL_BACKEND=mock
 ```
 
-Then run `./start.sh`. The mock backend exercises the UI, API, uploads, and database but
-does not perform model inference.
+Then run `./start.sh` or `./start.ps1`. The mock backend exercises the UI, API, uploads, and
+database but does not perform model inference.
 
 ## Configuration
 
@@ -74,8 +93,9 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `CYBERSLM_MODEL_BACKEND` | `mlx` | `mlx` for Gemma or `mock` for testing |
-| `CYBERSLM_MODEL_ID` | `mlx-community/gemma-3-4b-it-4bit` | Hugging Face model ID or local path |
+| `CYBERSLM_MODEL_BACKEND` | `auto` | Platform default, or `mlx`, `transformers`, or `mock` |
+| `CYBERSLM_MODEL_ID` | backend default | Hugging Face model ID or local path |
+| `CYBERSLM_TRANSFORMERS_DEVICE` | `auto` | Portable device: `auto`, `cuda`, `mps`, or `cpu` |
 | `CYBERSLM_ADAPTER_PATH` | empty | Optional evaluated LoRA adapter `.safetensors` path |
 | `CYBERSLM_MAX_TOKENS` | `1024` | Maximum generated tokens |
 | `CYBERSLM_TEMPERATURE` | `0.2` | Generation randomness |
@@ -414,8 +434,14 @@ FastAPI :8000 ─── SQLite conversations
     │
     ├── ATT&CK/CWE/CAPEC ─── chunks ─── FTS5 + local embeddings
     ▼
-Model backend ─── retrieved references ─── MLX-VLM ─── Gemma 3 4B (4-bit)
+Model backend ─── retrieved references ─┬─ MLX-VLM (Apple Silicon, 4-bit)
+                                       └─ PyTorch/Transformers (Linux/Windows/macOS)
+                                                    │
+                                                    ▼
+                                               Gemma 3 4B
 ```
 
-The model backend is intentionally isolated so additional local runtimes can be added without
-changing persistence, evaluation, or UI contracts.
+Both runtimes implement the same lazy generation, image, streaming, cancellation, status, and
+evaluation contracts. The portable backend selects CUDA when available, then MPS, then CPU.
+MLX adapters are intentionally rejected by the Transformers backend rather than silently
+ignored.

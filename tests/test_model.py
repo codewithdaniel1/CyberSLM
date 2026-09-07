@@ -1,13 +1,21 @@
+import sys
+from contextlib import nullcontext
 from pathlib import Path
+from queue import Queue
+from types import SimpleNamespace
 
 import pytest
 
+import cyberslm.config as config_module
+from cyberslm.config import DEFAULT_TRANSFORMERS_MODEL_ID, Settings
 from cyberslm.model import (
     STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
     GenerationCancelled,
     GenerationRequest,
     MLXGemmaBackend,
     MockBackend,
+    TransformersGemmaBackend,
+    create_backend,
 )
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
@@ -89,6 +97,161 @@ def test_mock_backend_streams_and_honors_cancellation() -> None:
 
     with pytest.raises(GenerationCancelled):
         list(backend.stream(request, lambda: True))
+
+
+def test_transformers_backend_is_lazy_and_selects_available_device() -> None:
+    test_settings = Settings(model_backend="transformers", model_id="")
+    backend = create_backend(test_settings)
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+        float32="float32",
+        float16="float16",
+        bfloat16="bfloat16",
+    )
+
+    assert isinstance(backend, TransformersGemmaBackend)
+    assert backend.status == {
+        "backend": "transformers",
+        "loaded": False,
+        "model_id": DEFAULT_TRANSFORMERS_MODEL_ID,
+        "device": "auto",
+        "dtype": None,
+        "adapter_path": None,
+        "error": None,
+    }
+    assert backend._select_device(fake_torch, "auto") == "cpu"
+    assert backend._select_dtype(fake_torch, "cpu") == "float32"
+
+
+def test_auto_backend_uses_platform_specific_runtime(monkeypatch) -> None:
+    monkeypatch.setattr(config_module.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(config_module.platform, "machine", lambda: "arm64")
+    apple = Settings(model_backend="auto", model_id="")
+
+    monkeypatch.setattr(config_module.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(config_module.platform, "machine", lambda: "AMD64")
+    windows = Settings(model_backend="auto", model_id="")
+
+    assert apple.model_backend == "mlx"
+    assert apple.model_id == "mlx-community/gemma-3-4b-it-4bit"
+    assert windows.model_backend == "transformers"
+    assert windows.model_id == DEFAULT_TRANSFORMERS_MODEL_ID
+
+
+def test_transformers_backend_rejects_unavailable_explicit_device() -> None:
+    backend = TransformersGemmaBackend(
+        Settings(model_backend="transformers", model_id=DEFAULT_TRANSFORMERS_MODEL_ID)
+    )
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+    )
+
+    with pytest.raises(RuntimeError, match="CUDA was requested"):
+        backend._select_device(fake_torch, "cuda")
+    with pytest.raises(RuntimeError, match="must be auto, cpu, cuda, or mps"):
+        backend._select_device(fake_torch, "directml")
+
+
+def test_transformers_backend_rejects_mlx_adapter_before_importing_runtime(tmp_path: Path) -> None:
+    backend = TransformersGemmaBackend(
+        Settings(
+            model_backend="transformers",
+            model_id=DEFAULT_TRANSFORMERS_MODEL_ID,
+            adapter_path=tmp_path / "adapter.safetensors",
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="currently supports only the MLX backend"):
+        backend._load()
+
+
+def test_transformers_backend_streams_with_metadata_without_loading_runtime(monkeypatch) -> None:
+    stop = object()
+
+    class FakeTensor:
+        def __init__(self, shape: tuple[int, int], floating: bool = False):
+            self.shape = shape
+            self.floating = floating
+
+        def is_floating_point(self) -> bool:
+            return self.floating
+
+        def to(self, *args, **kwargs):
+            return self
+
+    class FakeProcessor:
+        tokenizer = object()
+
+        def apply_chat_template(self, messages, **kwargs):
+            assert messages[0]["role"] == "user"
+            assert messages[0]["content"][-1]["type"] == "text"
+            return "formatted prompt"
+
+        def __call__(self, **kwargs):
+            assert kwargs["text"] == "formatted prompt"
+            assert kwargs["images"] is None
+            return {"input_ids": FakeTensor((1, 4))}
+
+    class FakeStreamer:
+        def __init__(self, tokenizer, **kwargs):
+            self.items: Queue[object] = Queue()
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            item = self.items.get(timeout=0.25)
+            if item is stop:
+                raise StopIteration
+            return item
+
+        def on_finalized_text(self, text: str, stream_end: bool = False) -> None:
+            if text:
+                self.items.put(text)
+            if stream_end:
+                self.items.put(stop)
+
+    class FakeModel:
+        def generate(self, **kwargs):
+            kwargs["streamer"].on_finalized_text("portable response", stream_end=True)
+            return SimpleNamespace(sequences=FakeTensor((1, 6)))
+
+    fake_torch = SimpleNamespace(inference_mode=nullcontext)
+    fake_transformers = SimpleNamespace(
+        StoppingCriteria=object,
+        StoppingCriteriaList=list,
+        TextIteratorStreamer=FakeStreamer,
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    backend = TransformersGemmaBackend(
+        Settings(
+            model_backend="transformers",
+            model_id=DEFAULT_TRANSFORMERS_MODEL_ID,
+            max_tokens=12,
+            temperature=0,
+        )
+    )
+    backend._model = FakeModel()
+    backend._processor = FakeProcessor()
+    backend._device = "cpu"
+    backend._dtype = "float32"
+    output = backend.generate_with_metadata(
+        GenerationRequest(
+            mode=MODES["general"],
+            messages=[{"role": "user", "content": "Hello"}],
+            image_paths=[],
+        )
+    )
+
+    assert output.text == "portable response"
+    assert output.finish_reason == "stop"
+    assert output.prompt_tokens == 4
+    assert output.generated_tokens == 2
+    assert output.max_tokens == 12
 
 
 def test_model_prompt_and_response_include_local_references() -> None:

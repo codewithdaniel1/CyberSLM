@@ -32,6 +32,8 @@ def main() -> int:
         "FastAPI": importlib.util.find_spec("fastapi") is not None,
         "Streamlit": importlib.util.find_spec("streamlit") is not None,
         "MLX-VLM": importlib.util.find_spec("mlx_vlm") is not None,
+        "Transformers": importlib.util.find_spec("transformers") is not None,
+        "PyTorch": importlib.util.find_spec("torch") is not None,
         "FastEmbed": importlib.util.find_spec("fastembed") is not None,
         "Semantic index": embedded == knowledge["chunk_count"] > 0,
         "SQLite": sqlite3.sqlite_version_info >= (3, 35),
@@ -58,6 +60,8 @@ def main() -> int:
     required = [checks["Python 3.11-3.13"], checks["FastAPI"], checks["Streamlit"]]
     if settings.model_backend == "mlx":
         required.extend([checks["Apple Silicon"], checks["MLX-VLM"]])
+    elif settings.model_backend == "transformers":
+        required.extend([checks["Transformers"], checks["PyTorch"]])
     if settings.rag_semantic_enabled:
         required.extend([checks["FastEmbed"], checks["Semantic index"]])
     return 0 if all(required) else 1

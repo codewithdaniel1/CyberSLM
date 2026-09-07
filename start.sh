@@ -30,8 +30,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "CyberSLM starting..."
-echo "Model: ${CYBERSLM_MODEL_ID:-mlx-community/gemma-3-4b-it-4bit}"
-echo "Backend: ${CYBERSLM_MODEL_BACKEND:-mlx}"
+echo "Model: ${CYBERSLM_MODEL_ID:-backend default}"
+echo "Backend: ${CYBERSLM_MODEL_BACKEND:-auto}"
 echo "Mode: Local"
 
 uv run uvicorn cyberslm.api:app --host "$API_HOST" --port "$API_PORT" >"$API_LOG" 2>&1 &
