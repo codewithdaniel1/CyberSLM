@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=TINY_MODEL_ID)
     parser.add_argument("--revision", default=TINY_MODEL_REVISION)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda", "mps"), default="cpu")
+    parser.add_argument("--quantization", choices=("none", "8bit", "4bit"), default="none")
     parser.add_argument("--max-tokens", type=int, default=2)
     parser.add_argument("--text-only", action="store_true")
     return parser
@@ -36,6 +37,7 @@ def main() -> int:
         model_id=args.model,
         transformers_device=args.device,
         transformers_revision=args.revision,
+        transformers_quantization=args.quantization,
         adapter_path=None,
         max_tokens=args.max_tokens,
         temperature=0,

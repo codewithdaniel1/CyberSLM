@@ -12,6 +12,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 DEFAULT_MLX_MODEL_ID = "mlx-community/gemma-3-4b-it-4bit"
 DEFAULT_TRANSFORMERS_MODEL_ID = "google/gemma-3-4b-it"
+TRANSFORMERS_QUANTIZATION_MODES = ("none", "8bit", "4bit")
 
 
 def default_model_backend() -> str:
@@ -65,6 +66,9 @@ class Settings:
     model_id: str = field(default_factory=lambda: os.getenv("CYBERSLM_MODEL_ID", "").strip())
     transformers_device: str = os.getenv("CYBERSLM_TRANSFORMERS_DEVICE", "auto").lower()
     transformers_revision: str = os.getenv("CYBERSLM_TRANSFORMERS_REVISION", "main").strip()
+    transformers_quantization: str = os.getenv(
+        "CYBERSLM_TRANSFORMERS_QUANTIZATION", "none"
+    ).lower()
     adapter_path: Path | None = (
         Path(value).expanduser().resolve()
         if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
@@ -97,6 +101,11 @@ class Settings:
             object.__setattr__(self, "model_id", default_model_id(backend))
         if not self.transformers_revision:
             object.__setattr__(self, "transformers_revision", "main")
+        quantization = self.transformers_quantization.strip().lower()
+        if quantization not in TRANSFORMERS_QUANTIZATION_MODES:
+            allowed = ", ".join(TRANSFORMERS_QUANTIZATION_MODES)
+            raise ValueError(f"CYBERSLM_TRANSFORMERS_QUANTIZATION must be one of: {allowed}")
+        object.__setattr__(self, "transformers_quantization", quantization)
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

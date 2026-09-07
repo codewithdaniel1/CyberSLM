@@ -34,6 +34,8 @@ def main() -> int:
         "MLX-VLM": importlib.util.find_spec("mlx_vlm") is not None,
         "Transformers": importlib.util.find_spec("transformers") is not None,
         "PyTorch": importlib.util.find_spec("torch") is not None,
+        "Accelerate": importlib.util.find_spec("accelerate") is not None,
+        "Bitsandbytes": importlib.util.find_spec("bitsandbytes") is not None,
         "FastEmbed": importlib.util.find_spec("fastembed") is not None,
         "Semantic index": embedded == knowledge["chunk_count"] > 0,
         "SQLite": sqlite3.sqlite_version_info >= (3, 35),
@@ -45,6 +47,9 @@ def main() -> int:
     print("CyberSLM doctor")
     print(f"Model: {settings.model_id}")
     print(f"Backend: {settings.model_backend}")
+    if settings.model_backend == "transformers":
+        print(f"Portable device: {settings.transformers_device}")
+        print(f"Portable quantization: {settings.transformers_quantization}")
     if code_validation["enabled"]:
         print(f"C compiler: {code_validation['compiler'] or 'not found'} (syntax-only)")
     else:
@@ -62,6 +67,8 @@ def main() -> int:
         required.extend([checks["Apple Silicon"], checks["MLX-VLM"]])
     elif settings.model_backend == "transformers":
         required.extend([checks["Transformers"], checks["PyTorch"]])
+        if settings.transformers_quantization != "none":
+            required.extend([checks["Accelerate"], checks["Bitsandbytes"]])
     if settings.rag_semantic_enabled:
         required.extend([checks["FastEmbed"], checks["Semantic index"]])
     return 0 if all(required) else 1

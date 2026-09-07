@@ -97,6 +97,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MODEL_ID` | backend default | Hugging Face model ID or local path |
 | `CYBERSLM_TRANSFORMERS_DEVICE` | `auto` | Portable device: `auto`, `cuda`, `mps`, or `cpu` |
 | `CYBERSLM_TRANSFORMERS_REVISION` | `main` | Portable model revision or pinned commit |
+| `CYBERSLM_TRANSFORMERS_QUANTIZATION` | `none` | Portable weights: `none`, `8bit`, or `4bit` |
 | `CYBERSLM_ADAPTER_PATH` | empty | Optional evaluated LoRA adapter `.safetensors` path |
 | `CYBERSLM_MAX_TOKENS` | `1024` | Maximum generated tokens |
 | `CYBERSLM_TEMPERATURE` | `0.2` | Generation randomness |
@@ -148,6 +149,26 @@ uv run python scripts/smoke_transformers.py
 
 This is a runtime smoke test, not a model-quality evaluation. It does not download the full Gemma
 3 4B weights and its randomly initialized output is intentionally meaningless.
+
+### Portable memory modes
+
+The Transformers runtime defaults to `none`, preserving the model's native 32-bit CPU or 16-bit
+GPU loading path. Linux and Windows installations can explicitly reduce model-weight memory:
+
+```dotenv
+# Approximately 4 GB of raw 4B weights, plus runtime/context overhead
+CYBERSLM_TRANSFORMERS_QUANTIZATION=8bit
+
+# Approximately 2 GB of raw 4B weights, plus runtime/context overhead
+CYBERSLM_TRANSFORMERS_QUANTIZATION=4bit
+```
+
+The estimates exclude PyTorch, image processing, the key/value cache, and other runtime memory.
+Quantization uses Bitsandbytes and never applies to MLX. CyberSLM does not silently fall back to
+unquantized weights when a selected mode is unsupported. Keep `none` for the evaluation control;
+compare 8-bit and 4-bit output against that control before choosing either for routine use. See
+the [official Transformers quantization guidance](https://huggingface.co/docs/transformers/quantization/bitsandbytes)
+for current platform and hardware support.
 
 ## Cyber knowledge and RAG
 

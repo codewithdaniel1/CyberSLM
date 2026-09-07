@@ -302,6 +302,12 @@ with st.sidebar:
     model_status = health["model"]
     backend_label = model_status.get("model_id", model_status["backend"])
     load_label = "ready" if model_status["loaded"] else "loads on first prompt"
+    runtime_parts = [model_status["backend"]]
+    if model_status.get("device"):
+        runtime_parts.append(model_status["device"])
+    if model_status.get("quantization") not in {None, "none"}:
+        runtime_parts.append(model_status["quantization"])
+    runtime_label = " · ".join(runtime_parts)
     knowledge_status = health.get("knowledge", {})
     knowledge_count = knowledge_status.get("document_count", 0)
     passage_count = knowledge_status.get("chunk_count", 0)
@@ -322,7 +328,8 @@ with st.sidebar:
         knowledge_label = "RAG disabled"
     st.markdown(
         f'<div class="cyber-subtitle"><span class="status-dot"></span>{backend_label}<br>'
-        f'<span style="padding-left: 1.05rem">{load_label} · private/local</span><br>'
+        '<span style="padding-left: 1.05rem">'
+        f"{load_label} · {runtime_label} · private/local</span><br>"
         f'<span style="padding-left: 1.05rem">{knowledge_label}</span></div>',
         unsafe_allow_html=True,
     )

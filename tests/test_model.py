@@ -118,6 +118,8 @@ def test_transformers_backend_is_lazy_and_selects_available_device() -> None:
         "revision": "main",
         "device": "auto",
         "dtype": None,
+        "quantization": "none",
+        "memory_footprint_bytes": None,
         "adapter_path": None,
         "error": None,
     }
@@ -155,6 +157,11 @@ def test_transformers_backend_rejects_unavailable_explicit_device() -> None:
         backend._select_device(fake_torch, "directml")
 
 
+def test_transformers_quantization_mode_is_validated() -> None:
+    with pytest.raises(ValueError, match="must be one of: none, 8bit, 4bit"):
+        Settings(transformers_quantization="int2")
+
+
 def test_transformers_backend_rejects_mlx_adapter_before_importing_runtime(tmp_path: Path) -> None:
     backend = TransformersGemmaBackend(
         Settings(
@@ -166,6 +173,87 @@ def test_transformers_backend_rejects_mlx_adapter_before_importing_runtime(tmp_p
 
     with pytest.raises(RuntimeError, match="currently supports only the MLX backend"):
         backend._load()
+
+
+@pytest.mark.parametrize(
+    ("quantization", "expected_options"),
+    [
+        ("8bit", {"load_in_8bit": True}),
+        (
+            "4bit",
+            {
+                "load_in_4bit": True,
+                "bnb_4bit_compute_dtype": "float32",
+                "bnb_4bit_quant_type": "nf4",
+            },
+        ),
+    ],
+)
+def test_transformers_backend_builds_explicit_quantized_load(
+    monkeypatch,
+    quantization: str,
+    expected_options: dict,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class FakeBitsAndBytesConfig:
+        def __init__(self, **kwargs):
+            self.options = kwargs
+
+    class FakeProcessorLoader:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs):
+            calls["processor"] = (model_id, kwargs)
+            return object()
+
+    class FakeModel:
+        def to(self, device: str) -> None:
+            calls["to"] = device
+
+        def eval(self) -> None:
+            calls["eval"] = True
+
+        def get_memory_footprint(self) -> int:
+            return 1234
+
+    class FakeModelLoader:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs):
+            calls["model"] = (model_id, kwargs)
+            return FakeModel()
+
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+        float32="float32",
+        float16="float16",
+        bfloat16="bfloat16",
+    )
+    fake_transformers = SimpleNamespace(
+        AutoProcessor=FakeProcessorLoader,
+        BitsAndBytesConfig=FakeBitsAndBytesConfig,
+        Gemma3ForConditionalGeneration=FakeModelLoader,
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    backend = TransformersGemmaBackend(
+        Settings(
+            model_backend="transformers",
+            model_id=DEFAULT_TRANSFORMERS_MODEL_ID,
+            transformers_device="cpu",
+            transformers_quantization=quantization,
+        )
+    )
+
+    backend._load()
+
+    model_id, model_options = calls["model"]
+    assert model_id == DEFAULT_TRANSFORMERS_MODEL_ID
+    assert model_options["device_map"] == {"": "cpu"}
+    assert model_options["quantization_config"].options == expected_options
+    assert "to" not in calls
+    assert calls["eval"] is True
+    assert backend.status["memory_footprint_bytes"] == 1234
 
 
 def test_transformers_backend_streams_with_metadata_without_loading_runtime(monkeypatch) -> None:

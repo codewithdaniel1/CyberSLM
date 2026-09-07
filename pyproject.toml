@@ -24,6 +24,8 @@ cyberslm-train = "cyberslm.training.cli:main"
 [project.optional-dependencies]
 mlx = ["mlx-vlm>=0.3.4,<1"]
 transformers = [
+  "accelerate>=1.7,<2",
+  "bitsandbytes>=0.48,<1",
   "sentencepiece>=0.2,<1",
   "torch>=2.7,<3",
   "transformers>=5,<6",

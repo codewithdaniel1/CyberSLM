@@ -31,9 +31,10 @@ Work should proceed in this order:
    PyTorch/Transformers Gemma runtime, automatic device selection, Linux-aware setup, Windows
    PowerShell launch/setup paths, and Linux/Windows CI contract checks are implemented. A pinned
    tiny random Gemma checkpoint exercises real multimodal loading and generation in CI without
-   evaluating output quality. Validate the full Gemma 3 4B model on representative Linux and
-   Windows hardware, then address portable memory usage. Keep MLX acceleration on Apple Silicon
-   and do not add a required hosted-model service.
+   evaluating output quality. Explicit unquantized, 8-bit, and 4-bit portable memory modes are
+   implemented and smoke-tested. Validate the full Gemma 3 4B model on representative Linux and
+   Windows hardware, then compare quantized quality and performance with the unquantized control.
+   Keep MLX acceleration on Apple Silicon and do not add a required hosted-model service.
 2. **Broaden model-quality evaluation.** Add independently sourced coverage beyond the current
    false-refusal suite, use the existing non-executing compiler check for generated C candidates,
    and retain human review for correctness and operational safety.

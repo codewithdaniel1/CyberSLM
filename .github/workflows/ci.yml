@@ -89,7 +89,10 @@ jobs:
           $null = [scriptblock]::Create((Get-Content -Raw ./start.ps1))
 
       - name: Run pinned multimodal generation smoke test
-        run: uv run python scripts/smoke_transformers.py
+        run: |
+          uv run python scripts/smoke_transformers.py
+          uv run python scripts/smoke_transformers.py --quantization 8bit --text-only
+          uv run python scripts/smoke_transformers.py --quantization 4bit
 
       - name: Test model and API contracts
         run: uv run pytest tests/test_model.py tests/test_api.py

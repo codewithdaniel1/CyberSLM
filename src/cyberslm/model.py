@@ -416,6 +416,7 @@ class TransformersGemmaBackend(ModelBackend):
         self._processor: Any = None
         self._device: str | None = None
         self._dtype: Any = None
+        self._memory_footprint_bytes: int | None = None
         self._load_error: str | None = None
         self._lock = threading.Lock()
 
@@ -460,7 +461,11 @@ class TransformersGemmaBackend(ModelBackend):
             )
         try:
             import torch
-            from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+            from transformers import (
+                AutoProcessor,
+                BitsAndBytesConfig,
+                Gemma3ForConditionalGeneration,
+            )
 
             self._device = self._select_device(torch, self.settings.transformers_device)
             self._dtype = self._select_dtype(torch, self._device)
@@ -468,20 +473,47 @@ class TransformersGemmaBackend(ModelBackend):
                 self.settings.model_id,
                 revision=self.settings.transformers_revision,
             )
+            model_options: dict[str, Any] = {
+                "dtype": self._dtype,
+                "revision": self.settings.transformers_revision,
+            }
+            quantization = self.settings.transformers_quantization
+            if quantization == "8bit":
+                model_options.update(
+                    {
+                        "device_map": {"": self._device},
+                        "quantization_config": BitsAndBytesConfig(load_in_8bit=True),
+                    }
+                )
+            elif quantization == "4bit":
+                model_options.update(
+                    {
+                        "device_map": {"": self._device},
+                        "quantization_config": BitsAndBytesConfig(
+                            load_in_4bit=True,
+                            bnb_4bit_compute_dtype=self._dtype,
+                            bnb_4bit_quant_type="nf4",
+                        ),
+                    }
+                )
             self._model = Gemma3ForConditionalGeneration.from_pretrained(
                 self.settings.model_id,
-                dtype=self._dtype,
-                revision=self.settings.transformers_revision,
+                **model_options,
             )
-            self._model.to(self._device)
+            if quantization == "none":
+                self._model.to(self._device)
             self._model.eval()
+            memory_footprint = getattr(self._model, "get_memory_footprint", None)
+            self._memory_footprint_bytes = (
+                int(memory_footprint()) if callable(memory_footprint) else None
+            )
             self._load_error = None
         except Exception as exc:  # pragma: no cover - depends on optional runtime/model
             self._load_error = f"{type(exc).__name__}: {exc}"
             raise RuntimeError(
                 "Unable to load the local Transformers model. Install the portable runtime "
                 "with `uv sync --extra transformers`, accept the Gemma license on Hugging "
-                "Face if requested, and verify the model ID. "
+                "Face if requested, and verify the model ID, device, and quantization mode. "
                 f"Original error: {self._load_error}"
             ) from exc
 
@@ -647,6 +679,8 @@ class TransformersGemmaBackend(ModelBackend):
             "revision": self.settings.transformers_revision,
             "device": self._device or self.settings.transformers_device,
             "dtype": dtype,
+            "quantization": self.settings.transformers_quantization,
+            "memory_footprint_bytes": self._memory_footprint_bytes,
             "adapter_path": None,
             "error": self._load_error,
         }
