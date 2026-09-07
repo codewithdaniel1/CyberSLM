@@ -273,8 +273,9 @@ baseline for prompt and model improvements, not a general benchmark result.
 
 After strengthening the honest-code prompt, a deterministic rerun of the same first five cases
 reduced length-limited generations from four to one. AI-assisted inspection still identified
-invalid C, so this is evidence of better completion behavior only—not correctness. Future
-candidates must pass compiler-backed syntax checks and human review.
+invalid C, so this is evidence of better completion behavior only—not correctness. CyberSLM now
+has an opt-in compiler-backed syntax checker; future candidates should use it and still require
+human review.
 
 When the local knowledge index is populated, evaluations use selective Auto RAG by default
 and record the source versions and hashes in the report. Use `--rag-policy off` for a

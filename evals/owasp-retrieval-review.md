@@ -1,6 +1,6 @@
 # OWASP pilot retrieval review
 
-Status: **Pending project-owner review**
+Status: **Deferred at the 2026-09-07 RAG checkpoint; project-owner review remains pending**
 
 Dataset SHA-256: `39367fd4020d5aa29b82a4544d2cb3bfd504f16e42be8f7463a6597015ee0793`
 
@@ -114,7 +114,8 @@ strict profile remains evaluation-only. OWASP therefore stays out of production 
 
 ## Review decision
 
+- Current product decision: Keep OWASP as an isolated opt-in pilot and defer admission review.
 - Reviewer: Pending
 - Reviewed at: Pending
 - Decision: Pending
-- Notes: Pending
+- Notes: Resume only as part of a later RAG cycle; this review does not block current work.

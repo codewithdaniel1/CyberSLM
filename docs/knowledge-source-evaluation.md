@@ -1,6 +1,7 @@
 # Additional knowledge-source evaluation
 
-Status: complete as of 2026-09-05.
+Status: source selection complete as of 2026-09-05; additional-source implementation paused at
+the production RAG checkpoint on 2026-09-07.
 
 This review closes the current source-discovery phase. It covers the eight credible source
 families most likely to add value beyond CyberSLM's pinned ATT&CK, CWE, and CAPEC snapshots.
@@ -36,10 +37,11 @@ production index. `Defer` identifies the product condition that would make the s
 | [FIRST EPSS](https://www.first.org/epss/) | **Defer as live data** | Dated exact-CVE API/CSV lookup | EPSS is a daily probability signal, not durable prose and not a complete risk score. Embedding it would create stale answers. A future vulnerability-prioritization tool should fetch or snapshot the score, percentile, score date, and model context; the [official API/data guidance](https://www.first.org/epss/data) distinguishes lookup from bulk access and requests attribution. |
 | [NIST OSCAL control catalogs](https://github.com/usnistgov/oscal-content) | **Defer until compliance mode** | Exact-control and profile lookup | The structured SP 800-53 catalogs and baselines are high quality but broad and organization-dependent. Adding them to default RAG would increase irrelevant prescriptive context. Revisit with an explicit governance/compliance mode. The official OSCAL content is public domain in the US and dedicated worldwide under [CC0-1.0](https://github.com/usnistgov/oscal-content/blob/main/LICENSE.md). |
 
-## Approved implementation order
+## Implementation order when this work resumes
 
 1. OWASP Cheat Sheet Series. Its pinned, opt-in parser and provisional retrieval A/B are
-   complete. Project-owner label review, routing, and attribution checks remain before admission.
+   complete. Project-owner label and claim-support review plus broader answer-quality testing
+   remain before admission.
 2. MITRE D3FEND, because it fills the defensive-countermeasure gap while connecting naturally
    to the existing ATT&CK source.
 3. CISA KEV, as an exact-CVE prioritization lookup instead of a corpus searched for every
@@ -66,7 +68,8 @@ documents necessarily improve the model.
 
 ## What remains
 
-The knowledge-source **selection evaluation is complete**. The remaining knowledge work is
-implementation and empirical admission testing for the three approved pilots, one source at a
-time. Model behavior evaluation, adapter experiments, and cross-platform runtime work remain
-separate roadmap tracks; they do not require further source discovery.
+The knowledge-source **selection evaluation is complete**, and no additional-source work blocks
+the current product. ATT&CK, CWE, and CAPEC remain the stable production RAG. OWASP stays an
+isolated developer pilot, while OWASP admission testing, D3FEND, and KEV are deferred to a later
+RAG cycle. Model behavior evaluation, adapter experiments, and cross-platform runtime work can
+proceed independently. See [`roadmap.md`](roadmap.md) for the prioritized backlog.

@@ -341,8 +341,9 @@ claim, and it directly motivated stricter honest-code-generation instructions.
 
 A same-five-case follow-up after those instructions reduced length-limited generations from
 four to one, and responses disclosed more omissions. AI-assisted inspection still found
-invalid C in the sample, so prompt wording alone is not treated as a correctness fix. The next
-quality step is compiler-backed syntax validation that never executes generated code.
+invalid C in the sample, so prompt wording alone is not treated as a correctness fix. That
+finding led to the optional compiler-backed, non-executing syntax checker described above;
+future model candidates should be measured with it rather than trusted from prose alone.
 
 ## Optional adapter experiments
 
@@ -370,58 +371,15 @@ safety, and refusal evaluations.
 
 ## Roadmap
 
-Work should proceed in this order:
+The v0.5 RAG phase is complete for now with ATT&CK, CWE, and CAPEC as the stable production
+sources. The OWASP work remains an isolated opt-in pilot; its pending human review and any
+D3FEND or KEV work are explicitly deferred and do not block other product work.
 
-Completed through v0.5: passage chunking, local embeddings, hybrid vector/FTS5 retrieval,
-reciprocal-rank reranking, retrieval/citation/safety metrics, resumable indexing, source
-previews, CAPEC, CI/package builds, token streaming, cancellation, in-app verified knowledge
-sync, selective Auto/On/Off RAG, adapter loading, a reviewed-data LoRA workflow, verified
-private backups, exact-passage claim-support review, opt-in non-executing C syntax validation,
-and tagged GitHub release automation.
-
-Remaining work should proceed in this order:
-
-1. **Expand evaluation:** the first licensed external false-refusal suite is present. Add
-   independently sourced coverage. The human-approved balanced 24-case suite covers correctness,
-   groundedness, prompt-injection resistance, and safety boundaries across all six modes. Its
-   first model-only baseline and human review are complete. A prompt-hardening candidate shows
-   a modest human-reviewed improvement. Auto-RAG now matches the product policy and retrieves
-   the expected references exactly, but qualitative review shows that the model can over-apply
-   background material. Auto now abstains when facts are explicitly missing or a validation
-   request forbids data access or mutation, unless the user explicitly requests a standard.
-   The matched candidate restores 16/24 deterministic passes, keeps retrieval and labeled
-   routing at 100%, and improves the human-approved AI-assisted review from 8/24 to 10/24. The
-   evaluator excludes the automatic source footer from citation scoring and separately measures
-   exact-ID attribution, exposing that Gemma still does not reliably cite retrieved claims.
-   Per-source attribution labels now expose the specific failure mode without rewriting the
-   answer. The source-hash-locked claim-support workflow and first focused review are complete:
-   both extracted mappings were only partially supported and one retrieved source was unlinked,
-   so automatic citation repair is not justified. The Auto-routing slice is expanded from 30 to
-   48 balanced cases, with all 18 new labels project-owner approved.
-2. **Expand vetted cyber coverage:** source discovery is complete for the current eight-source
-   shortlist. The pinned, opt-in OWASP Cheat Sheet parser is implemented and its pending-review
-   24-case retrieval slice improves both lexical and hybrid recall from 0/24 to 24/24. Isolated
-   pilot routing passes all 24 source-specific cases and preserves all 48 existing balanced gate
-   decisions. Routing-aware title preference improves top-one retrieval on the synthetic pilot
-   from 18/24 to 24/24 while remaining inactive for normal sources. A six-case case-aware citation
-   experiment retrieves the intended sheet in 6/6 and has no unsupported linked claims in its
-   AI-assisted draft, but two answers omit citations and the draft still needs project-owner
-   approval. Then implement MITRE D3FEND and CISA KEV. Admit each only after its held-out A/B
-   benchmark shows incremental value.
-   NVD, OSV, Sigma, EPSS, and NIST OSCAL are evaluated and intentionally deferred; see the
-   [decision matrix](docs/knowledge-source-evaluation.md).
-3. **Run a controlled adapter experiment:** assemble and human-review a separately licensed
-   corpus, then adopt an adapter only if held-out evaluations beat the RAG-only model.
-4. **Add cross-platform local runtimes:** retain MLX acceleration on Apple Silicon and add a
-   pluggable local inference backend, launchers, packaging, and CI coverage for Linux and
-   Windows without introducing a hosted-model dependency.
-5. **Harden releases:** tagged builds, checksums, backups, GitHub Release publishing, and
-   public-repository provenance attestations are present. Add restoration/migration matrices
-   and enable private-repository attestations if the repository moves to Enterprise Cloud.
-
-The immediate next milestone is item 2: approve or revise the OWASP labels and complete human
-review of the six-case source-linked claim sample before deciding whether to improve citation
-behavior, admit the source, or keep it as an opt-in pilot.
+The next active milestone is cross-platform local inference for Linux and Windows while
+retaining MLX acceleration on Apple Silicon. Broader independent evaluation, one gated adapter
+experiment, and upgrade/release hardening follow it. See the single prioritized
+[`project roadmap`](docs/roadmap.md) for the complete active and deferred to-do list and the RAG
+closeout evidence.
 
 ## Authorization context
 
