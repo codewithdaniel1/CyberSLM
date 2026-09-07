@@ -115,6 +115,7 @@ def test_transformers_backend_is_lazy_and_selects_available_device() -> None:
         "backend": "transformers",
         "loaded": False,
         "model_id": DEFAULT_TRANSFORMERS_MODEL_ID,
+        "revision": "main",
         "device": "auto",
         "dtype": None,
         "adapter_path": None,

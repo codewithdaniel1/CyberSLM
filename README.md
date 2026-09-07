@@ -96,6 +96,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MODEL_BACKEND` | `auto` | Platform default, or `mlx`, `transformers`, or `mock` |
 | `CYBERSLM_MODEL_ID` | backend default | Hugging Face model ID or local path |
 | `CYBERSLM_TRANSFORMERS_DEVICE` | `auto` | Portable device: `auto`, `cuda`, `mps`, or `cpu` |
+| `CYBERSLM_TRANSFORMERS_REVISION` | `main` | Portable model revision or pinned commit |
 | `CYBERSLM_ADAPTER_PATH` | empty | Optional evaluated LoRA adapter `.safetensors` path |
 | `CYBERSLM_MAX_TOKENS` | `1024` | Maximum generated tokens |
 | `CYBERSLM_TEMPERATURE` | `0.2` | Generation randomness |
@@ -137,6 +138,16 @@ uv run ruff check .
 ```
 
 API documentation is available at <http://127.0.0.1:8000/docs> while the backend runs.
+
+After installing the portable runtime, exercise its real multimodal preprocessing and generation
+path with the pinned 56 MB random test checkpoint:
+
+```bash
+uv run python scripts/smoke_transformers.py
+```
+
+This is a runtime smoke test, not a model-quality evaluation. It does not download the full Gemma
+3 4B weights and its randomly initialized output is intentionally meaningless.
 
 ## Cyber knowledge and RAG
 

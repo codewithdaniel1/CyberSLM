@@ -64,6 +64,7 @@ class Settings:
     model_backend: str = field(default_factory=_configured_model_backend)
     model_id: str = field(default_factory=lambda: os.getenv("CYBERSLM_MODEL_ID", "").strip())
     transformers_device: str = os.getenv("CYBERSLM_TRANSFORMERS_DEVICE", "auto").lower()
+    transformers_revision: str = os.getenv("CYBERSLM_TRANSFORMERS_REVISION", "main").strip()
     adapter_path: Path | None = (
         Path(value).expanduser().resolve()
         if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
@@ -94,6 +95,8 @@ class Settings:
         object.__setattr__(self, "model_backend", backend)
         if not self.model_id.strip():
             object.__setattr__(self, "model_id", default_model_id(backend))
+        if not self.transformers_revision:
+            object.__setattr__(self, "transformers_revision", "main")
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

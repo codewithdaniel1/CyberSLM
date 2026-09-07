@@ -464,10 +464,14 @@ class TransformersGemmaBackend(ModelBackend):
 
             self._device = self._select_device(torch, self.settings.transformers_device)
             self._dtype = self._select_dtype(torch, self._device)
-            self._processor = AutoProcessor.from_pretrained(self.settings.model_id)
+            self._processor = AutoProcessor.from_pretrained(
+                self.settings.model_id,
+                revision=self.settings.transformers_revision,
+            )
             self._model = Gemma3ForConditionalGeneration.from_pretrained(
                 self.settings.model_id,
                 dtype=self._dtype,
+                revision=self.settings.transformers_revision,
             )
             self._model.to(self._device)
             self._model.eval()
@@ -640,6 +644,7 @@ class TransformersGemmaBackend(ModelBackend):
             "backend": "transformers",
             "loaded": self._model is not None,
             "model_id": self.settings.model_id,
+            "revision": self.settings.transformers_revision,
             "device": self._device or self.settings.transformers_device,
             "dtype": dtype,
             "adapter_path": None,
