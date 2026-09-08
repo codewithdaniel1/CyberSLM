@@ -53,13 +53,16 @@ machine. Work should proceed in this order:
      approve all six released responses. The result was 5/6 automatic passes and 6/6 accepted by
      manual review; the remaining miss was a Base64 phrasing false negative.
 3. **Ship a local alpha.**
-   - [ ] Verify setup and startup on this Mac.
-   - [ ] Verify text chat, image chat, selective RAG, conversation persistence, and deletion.
-   - [ ] Verify clean shutdown and restart with saved data.
-   - [ ] Update the final user documentation and tag the first usable local alpha.
+   - [x] Verify setup and startup on this Mac.
+   - [x] Verify real 4B text chat, image chat, selective RAG, conversation persistence, and
+     deletion against an isolated data root.
+   - [x] Verify clean shutdown and restart with saved data.
+   - [x] Update the final user documentation with the acceptance evidence and known limitations.
+   - [ ] Perform one visual browser spot-check and tag the first usable local alpha.
 
-The alpha is complete when these three steps pass. It does not require fine-tuning, additional
-knowledge sources, exhaustive external evaluations, or validation on every supported platform.
+The core acceptance checks are complete. The alpha can be tagged after the remaining visual
+browser spot-check. It does not require fine-tuning, additional knowledge sources, exhaustive
+external evaluations, or validation on every supported platform.
 
 ## Post-alpha backlog
 

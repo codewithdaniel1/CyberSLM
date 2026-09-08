@@ -1,6 +1,6 @@
 # Local alpha model validation
 
-Status: In progress as of 2026-09-07
+Status: Core local acceptance passed on 2026-09-07; visual browser spot-check pending
 
 This document records the evidence used to decide whether the local CyberSLM alpha is ready. It
 does not treat automatic keyword scores as proof of correctness or safety.
@@ -119,3 +119,37 @@ the scorer required the contiguous phrase “not encryption,” “no secret key
 Manual review accepted all six released answers. The model-response baseline is approved for the
 end-to-end local alpha checks, but the alpha should not be tagged until setup, chat, image,
 persistence, deletion, shutdown, and restart have been verified.
+
+## End-to-end local acceptance
+
+The macOS setup script completed successfully with Python 3.12 and the MLX runtime. Two complete
+startup cycles then ran through `start.sh` against a temporary data root and a copied, verified
+knowledge index. The normal repository conversations, uploads, knowledge database, and cached 4B
+model were not modified by the acceptance chats.
+
+The acceptance run verified:
+
+- API and Streamlit health on isolated localhost ports;
+- a real streamed text answer from `mlx-community/gemma-3-4b-it-4bit` with knowledge Off;
+- a real streamed image answer that correctly identified a generated red test image;
+- Auto retrieval selecting four ATT&CK passages for an explicit failed-SSH mapping;
+- On retrieval forcing four ATT&CK passages for a generic phishing question;
+- durable user and assistant messages across a clean stop and second startup;
+- conversation deletion returning 404 afterward and removing its stored image;
+- deletion of the remaining acceptance conversations after restart; and
+- clean shutdown with no API or UI listener left behind and no API traceback or error in the
+  startup log.
+
+Forced retrieval behaved as designed but illustrated why Auto remains the default: the generic
+phishing prompt received several weakly relevant ATT&CK passages, and the 4B model did not produce
+valid numbered inline citations. This is a known quality limitation, not a persistence or routing
+failure.
+
+After the run, Ruff passed, all 117 tests passed, Bash startup/setup syntax checks passed, and both
+the source distribution and wheel built successfully. The 236 MB temporary acceptance data copy
+was removed after its results were recorded.
+
+The in-app browser controller was unavailable in this development session. Streamlit served its
+HTML and health endpoint, and the light theme remains covered by configuration and regression
+tests, but a person should still perform one visual chat/upload/delete spot-check before creating
+the alpha tag.

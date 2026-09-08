@@ -5,6 +5,10 @@ CyberSLM is a private, local-first multimodal cybersecurity assistant. Version 0
 Windows, provides a Streamlit chat interface, accepts screenshots, and persists multiple
 conversations in SQLite.
 
+The guarded 4B model baseline and core end-to-end flow have passed local Apple Silicon acceptance.
+The detailed evidence and remaining pre-tag visual spot-check are tracked in
+[`docs/alpha-validation.md`](docs/alpha-validation.md).
+
 ## What works in v0.5
 
 - Local text and screenshot/image analysis
@@ -92,9 +96,12 @@ database but does not perform model inference.
 ## Configuration
 
 Copy `.env.example` to `.env` (the setup script does this automatically). Important values:
+Set `CYBERSLM_ENV_FILE` before running a startup script when you need an alternate configuration
+without changing the repository `.env`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `CYBERSLM_ENV_FILE` | repository `.env` | Alternate startup environment file |
 | `CYBERSLM_MODEL_BACKEND` | `auto` | Platform default, or `mlx`, `transformers`, or `mock` |
 | `CYBERSLM_MODEL_ID` | backend default | Hugging Face model ID or local path |
 | `CYBERSLM_TRANSFORMERS_DEVICE` | `auto` | Portable device: `auto`, `cuda`, `mps`, or `cpu` |
@@ -106,6 +113,7 @@ Copy `.env.example` to `.env` (the setup script does this automatically). Import
 | `CYBERSLM_MAX_UPLOAD_MB` | `10` | Per-image upload limit |
 | `CYBERSLM_API_PORT` | `8000` | Local API port |
 | `CYBERSLM_UI_PORT` | `8501` | Local UI port |
+| `CYBERSLM_DATA_DIR` | repository `data/` | Conversations, uploads, and local knowledge root |
 | `CYBERSLM_RAG_ENABLED` | `true` | Master switch permitting local knowledge retrieval |
 | `CYBERSLM_RAG_SEMANTIC_ENABLED` | `true` | Combine embeddings with FTS5 retrieval |
 | `CYBERSLM_RAG_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Local FastEmbed model |

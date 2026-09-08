@@ -8,7 +8,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / ".env")
+ENV_FILE = Path(os.getenv("CYBERSLM_ENV_FILE", PROJECT_ROOT / ".env")).expanduser()
+load_dotenv(ENV_FILE)
 
 DEFAULT_MLX_MODEL_ID = "mlx-community/gemma-3-4b-it-4bit"
 DEFAULT_TRANSFORMERS_MODEL_ID = "google/gemma-3-4b-it"
@@ -53,15 +54,30 @@ def _bool_env(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _data_dir() -> Path:
+    configured = os.getenv("CYBERSLM_DATA_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return PROJECT_ROOT / "data"
+
+
+def _data_path(*parts: str) -> Path:
+    return _data_dir().joinpath(*parts)
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     project_root: Path = PROJECT_ROOT
-    data_dir: Path = PROJECT_ROOT / "data"
-    upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
-    database_path: Path = PROJECT_ROOT / "data" / "cyberslm.db"
-    knowledge_dir: Path = PROJECT_ROOT / "data" / "knowledge"
-    knowledge_database_path: Path = PROJECT_ROOT / "data" / "knowledge" / "knowledge.db"
-    embedding_cache_dir: Path = PROJECT_ROOT / "data" / "knowledge" / "models"
+    data_dir: Path = field(default_factory=_data_dir)
+    upload_dir: Path = field(default_factory=lambda: _data_path("uploads"))
+    database_path: Path = field(default_factory=lambda: _data_path("cyberslm.db"))
+    knowledge_dir: Path = field(default_factory=lambda: _data_path("knowledge"))
+    knowledge_database_path: Path = field(
+        default_factory=lambda: _data_path("knowledge", "knowledge.db")
+    )
+    embedding_cache_dir: Path = field(
+        default_factory=lambda: _data_path("knowledge", "models")
+    )
     model_backend: str = field(default_factory=_configured_model_backend)
     model_id: str = field(default_factory=lambda: os.getenv("CYBERSLM_MODEL_ID", "").strip())
     transformers_device: str = os.getenv("CYBERSLM_TRANSFORMERS_DEVICE", "auto").lower()

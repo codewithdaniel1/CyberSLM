@@ -9,10 +9,11 @@ if [[ ! -d .venv ]]; then
   exit 1
 fi
 
-if [[ -f .env ]]; then
+ENV_FILE="${CYBERSLM_ENV_FILE:-.env}"
+if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source .env
+  source "$ENV_FILE"
   set +a
 fi
 

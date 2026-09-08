@@ -7,8 +7,9 @@ if (-not (Test-Path ".venv")) {
     Write-Error "CyberSLM is not set up yet. Run ./setup.ps1 first."
 }
 
-if (Test-Path ".env") {
-    foreach ($line in Get-Content ".env") {
+$envFile = if ($env:CYBERSLM_ENV_FILE) { $env:CYBERSLM_ENV_FILE } else { ".env" }
+if (Test-Path $envFile) {
+    foreach ($line in Get-Content $envFile) {
         if ($line -match '^\s*([^#=][^=]*)=(.*)$') {
             $name = $Matches[1].Trim()
             $value = $Matches[2].Trim().Trim('"').Trim("'")
