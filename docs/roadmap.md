@@ -37,15 +37,21 @@ machine. Work should proceed in this order:
      behavior.
    - [x] Compare the temporary Gemma 3 12B MLX checkpoint and remove its isolated 7.5 GB cache.
      Its higher automatic score did not survive manual factual review, so the default remains 4B.
-   - [ ] Resolve the open safety and factual-accuracy blockers, then approve a release baseline.
+   - [x] Resolve the reproduced safety and factual-accuracy blockers and approve the guarded 4B
+     model-response baseline for end-to-end alpha verification.
 2. **Fix demonstrated release blockers.**
    - [x] Prevent artificial 128-token benchmark truncation.
    - [x] Add bounded deterministic Base64 analysis after confirming that the 4B model decoded the
      test value incorrectly even with a minimal prompt.
    - [x] Remove upstream CWE `[REF-*]` bibliography markers from model context so they cannot be
      mistaken for CyberSLM citations.
-   - [ ] Stop unsafe real-file SSRF validation suggestions reliably; prompt wording alone did not.
-   - [ ] Correct remaining wrong or overstated CWE, ATT&CK, and Windows event claims.
+   - [x] Block the demonstrated sensitive-target SSRF instructions before answer release; prompt
+     wording alone did not.
+   - [x] Correct the demonstrated failed-SSH ATT&CK mapping, Python SQL fix, and PowerShell 4104
+     interpretation with narrow, transparent deterministic rules.
+   - [x] Re-run the guarded production Auto-RAG suite with the default 4B model and manually
+     approve all six released responses. The result was 5/6 automatic passes and 6/6 accepted by
+     manual review; the remaining miss was a Base64 phrasing false negative.
 3. **Ship a local alpha.**
    - [ ] Verify setup and startup on this Mac.
    - [ ] Verify text chat, image chat, selective RAG, conversation persistence, and deletion.

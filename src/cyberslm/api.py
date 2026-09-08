@@ -26,6 +26,7 @@ from cyberslm.knowledge.sources import SOURCES
 from cyberslm.knowledge.sync_job import KnowledgeSyncManager
 from cyberslm.model import GenerationCancelled, GenerationRequest, create_backend
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
+from cyberslm.response_guard import apply_response_guard, response_guard_status
 
 settings.ensure_directories()
 db = Database(settings.database_path)
@@ -240,15 +241,24 @@ async def prepare_message(
     )
 
 
-def apply_code_validation(prepared: PreparedMessage, response_text: str) -> tuple[str, dict]:
+def apply_output_checks(
+    prepared: PreparedMessage,
+    response_text: str,
+) -> tuple[str, dict, dict]:
+    guarded = apply_response_guard(prepared.request, response_text)
     report = code_validator.validate(
-        response_text,
+        guarded.text,
         requested=prepared.code_validation_requested,
     )
-    return response_text + validation_footer(report), report
+    return guarded.text + validation_footer(report), report, guarded.metadata()
 
 
-def persist_message(prepared: PreparedMessage, response_text: str, code_validation: dict) -> dict:
+def persist_message(
+    prepared: PreparedMessage,
+    response_text: str,
+    code_validation: dict,
+    response_guard: dict,
+) -> dict:
     user_message = db.add_message(
         prepared.conversation_id,
         "user",
@@ -274,6 +284,7 @@ def persist_message(prepared: PreparedMessage, response_text: str, code_validati
         "knowledge": public_knowledge(prepared.knowledge_documents),
         "rag": prepared.retrieval_decision.metadata(len(prepared.knowledge_documents)),
         "code_validation": code_validation,
+        "response_guard": response_guard,
     }
 
 
@@ -348,6 +359,7 @@ def health() -> dict:
         "rag_enabled": settings.rag_enabled,
         "rag_semantic_enabled": settings.rag_semantic_enabled,
         "code_validation": code_validator.status,
+        "response_guard": response_guard_status(),
     }
 
 
@@ -495,12 +507,12 @@ async def send_message(
     except RuntimeError as exc:
         delete_attachments(prepared.attachments)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    response_text, validation = await run_in_threadpool(
-        apply_code_validation,
+    response_text, validation, guard = await run_in_threadpool(
+        apply_output_checks,
         prepared,
         response_text,
     )
-    return persist_message(prepared, response_text, validation)
+    return persist_message(prepared, response_text, validation, guard)
 
 
 @app.post("/api/conversations/{conversation_id}/messages/stream")
@@ -540,15 +552,19 @@ async def stream_message(
                     "requested": prepared.code_validation_requested,
                     **code_validator.status,
                 },
+                response_guard=response_guard_status(),
             )
             for chunk in model_backend.stream(prepared.request, cancellation.is_set):
                 chunks.append(chunk)
-                yield ndjson_event("token", text=chunk)
             response_text = "".join(chunks).strip()
             if not response_text:
                 response_text = "The model returned an empty response."
-            response_text, validation = apply_code_validation(prepared, response_text)
-            result = persist_message(prepared, response_text, validation)
+            response_text, validation, guard = apply_output_checks(prepared, response_text)
+            for start in range(0, len(response_text), 64):
+                if cancellation.is_set():
+                    raise GenerationCancelled
+                yield ndjson_event("token", text=response_text[start : start + 64])
+            result = persist_message(prepared, response_text, validation, guard)
             completed = True
             yield ndjson_event("done", result=result)
         except GenerationCancelled:

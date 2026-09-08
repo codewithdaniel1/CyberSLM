@@ -46,7 +46,7 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
     response = client.post(
         f"/api/conversations/{conversation_id}/messages",
         data={
-            "content": "Triage these failed SSH logins",
+            "content": "Explain T1110",
             "mode": "defensive",
             "authorization_context": "defensive_operations",
         },
@@ -57,19 +57,19 @@ def test_chat_api_round_trip(tmp_path: Path, monkeypatch) -> None:
         "Local references retrieved — inline citations: 0/1; exact-ID citations: 0/1"
         in response.json()["assistant"]["content"]
     )
-    assert "— not explicitly referenced" in response.json()["assistant"]["content"]
+    assert "— exact ID mentioned; citation not linked" in response.json()["assistant"]["content"]
     assert response.json()["knowledge"][0]["id"] == "attack:T1110"
     assert response.json()["rag"] == {
         "policy": "auto",
         "attempted": True,
         "used": True,
-        "reason": "source_relevant",
+        "reason": "explicit_reference",
         "source_keys": ["attack"],
         "document_count": 1,
     }
 
     loaded = client.get(f"/api/conversations/{conversation_id}").json()
-    assert loaded["title"] == "Triage these failed SSH logins"
+    assert loaded["title"] == "Explain T1110"
     assert loaded["authorization_context"] == "defensive_operations"
     assert len(loaded["messages"]) == 2
 
@@ -117,6 +117,55 @@ def test_chat_api_streams_ndjson_and_persists_on_completion(tmp_path: Path, monk
 
     loaded = client.get(f"/api/conversations/{conversation['id']}").json()
     assert [message["role"] for message in loaded["messages"]] == ["user", "assistant"]
+
+
+def test_chat_api_guards_nonstreaming_and_streaming_output_before_release(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class UnsafeSSRFBackend:
+        @property
+        def status(self) -> dict:
+            return {"backend": "unsafe-test", "loaded": True}
+
+        def generate(self, request) -> str:
+            del request
+            return "Verify SSRF by requesting file:///etc/passwd from the target."
+
+        def stream(self, request, cancelled=None):
+            del request
+            for chunk in ("Verify SSRF by requesting ", "file:///etc/passwd from the target."):
+                if cancelled and cancelled():
+                    return
+                yield chunk
+
+    monkeypatch.setattr(api_module, "db", Database(tmp_path / "api.db"))
+    monkeypatch.setattr(api_module, "model_backend", UnsafeSSRFBackend())
+    monkeypatch.setattr(api_module, "knowledge_store", KnowledgeStore(tmp_path / "knowledge.db"))
+    client = TestClient(api_module.app)
+
+    first = client.post("/api/conversations", json={"mode": "offensive"}).json()
+    direct = client.post(
+        f"/api/conversations/{first['id']}/messages",
+        data={"content": "Safely verify SSRF in this URL-fetch endpoint."},
+    )
+
+    assert direct.status_code == 200
+    assert "file://" not in direct.json()["assistant"]["content"]
+    assert direct.json()["response_guard"]["rules"] == ["ssrf-sensitive-target"]
+
+    second = client.post("/api/conversations", json={"mode": "offensive"}).json()
+    streamed = client.post(
+        f"/api/conversations/{second['id']}/messages/stream",
+        data={"content": "Safely verify SSRF in this URL-fetch endpoint."},
+    )
+    events = [json.loads(line) for line in streamed.text.splitlines()]
+    released_text = "".join(event["text"] for event in events if event["type"] == "token")
+
+    assert events[0]["response_guard"]["streaming_release"] == "buffered_until_verified"
+    assert "file://" not in released_text
+    assert "controlled canary" in released_text
+    assert events[-1]["result"]["response_guard"]["triggered"] is True
 
 
 def test_chat_api_validates_and_honors_rag_policy(tmp_path: Path, monkeypatch) -> None:

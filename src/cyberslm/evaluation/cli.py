@@ -412,6 +412,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if safety["false_refusal_rate"] is not None:
             message += f" | False-refusal rate: {safety['false_refusal_rate']:.1%}"
         print(message)
+    response_guard = report["summary"]["response_guard"]
+    print(
+        f"Response guard: {response_guard['triggered']}/{response_guard['cases']} corrected | "
+        f"Rules: {response_guard['rules']}"
+    )
     generation = report["summary"]["generation"]
     if generation["length_limited_rate"] is None:
         print(f"Finish reasons unavailable: {generation['finish_reasons']}")

@@ -64,6 +64,16 @@ class LengthLimitedBackend(ModelBackend):
         return {"backend": "length-limited", "loaded": True}
 
 
+class IncorrectPowerShellBackend(ModelBackend):
+    def generate(self, request: GenerationRequest) -> str:
+        del request
+        return "Event 4104 means a PowerShell profile was loaded and records its path."
+
+    @property
+    def status(self) -> dict[str, Any]:
+        return {"backend": "incorrect-powershell", "loaded": True}
+
+
 def write_dataset(path: Path) -> None:
     case = {
         "id": "ssh",
@@ -143,6 +153,40 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
         "references_without_claims": 0,
         "review_required": 1,
     }
+    assert report["summary"]["response_guard"] == {
+        "cases": 1,
+        "triggered": 0,
+        "rules": {},
+    }
+
+
+def test_evaluation_scores_guarded_response_and_reports_rule(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "powershell.jsonl"
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "id": "powershell-4104",
+                "category": "forensics",
+                "mode": "forensics",
+                "prompt": "What does PowerShell event ID 4104 contain?",
+                "expected_concepts": [["script block"], ["PowerShell"]],
+                "minimum_score": 1,
+            }
+        )
+        + "\n"
+    )
+
+    report = EvaluationRunner(IncorrectPowerShellBackend(), rag_policy="off").run(
+        load_dataset(dataset_path),
+        dataset_path=dataset_path,
+    )
+
+    case = report["cases"][0]
+    assert case["evaluation"]["passed"] is True
+    assert "Script Block Logging" in case["response"]
+    assert "profile was loaded" not in case["response"]
+    assert case["response_guard"]["rules"] == ["powershell-4104"]
+    assert report["summary"]["response_guard"]["triggered"] == 1
 
 
 def test_generation_evaluation_uses_selective_rag_policy(tmp_path: Path) -> None:

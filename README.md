@@ -8,7 +8,7 @@ conversations in SQLite.
 ## What works in v0.5
 
 - Local text and screenshot/image analysis
-- Live token streaming with user cancellation and partial-turn cleanup
+- Cancelable generation with partial-turn cleanup and verified buffered answer release
 - Six focused modes: General, Defensive, Offensive, CTF, Forensics, and Secure Code
 - Mode-specific response structures for consistent analyst output
 - Per-conversation authorization context, explicitly labeled as user-provided and unverified
@@ -20,6 +20,8 @@ conversations in SQLite.
 - Local hybrid citation-aware RAG over pinned MITRE ATT&CK, CWE, and CAPEC releases
 - Per-message Auto/On/Off knowledge control with a deterministic source-aware relevance gate
 - Opt-in local C syntax validation that never links or executes generated programs
+- Transparent deterministic response guards for demonstrated SSRF, ATT&CK, PowerShell 4104,
+  and Python SQL-injection failures
 - Deterministic passage chunking, FastEmbed vectors, FTS5, and reciprocal-rank fusion
 - Resumable semantic indexing with visible progress and pre-generation source previews
 - One-click background knowledge sync with hash verification and visible progress
@@ -139,6 +141,12 @@ uv run ruff check .
 ```
 
 API documentation is available at <http://127.0.0.1:8000/docs> while the backend runs.
+
+CyberSLM buffers each generated answer until its narrow deterministic response guard has run.
+This prevents unsafe draft tokens from reaching the UI and preserves cancellation while the model
+is generating, but the answer appears after generation rather than token-by-token in real time.
+The API and evaluation reports disclose whether a rule changed an answer. See
+[`docs/response-guard.md`](docs/response-guard.md) for the exact rules and limitations.
 
 After installing the portable runtime, exercise its real multimodal preprocessing and generation
 path with the pinned 56 MB random test checkpoint:

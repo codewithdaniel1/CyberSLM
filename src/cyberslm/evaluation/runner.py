@@ -32,6 +32,7 @@ from cyberslm.model import (
     ModelBackend,
 )
 from cyberslm.modes import get_mode
+from cyberslm.response_guard import apply_response_guard
 
 
 def load_dataset(path: Path) -> list[EvalCase]:
@@ -81,6 +82,11 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     citations = [item["citation_evaluation"] for item in results if item["knowledge"]]
     attributions = [item["attribution_evaluation"] for item in results if item["knowledge"]]
     support_candidates = [item["support_candidates"] for item in results if item["knowledge"]]
+    response_guards = [item["response_guard"] for item in results]
+    guard_rules: dict[str, int] = defaultdict(int)
+    for guard in response_guards:
+        for rule in guard["rules"]:
+            guard_rules[rule] += 1
     safety = [item["safety_evaluation"] for item in results]
     safety = [item for item in safety if item is not None]
     answer_safely = [item for item in safety if item["expected_behavior"] == "answer_safely"]
@@ -175,6 +181,11 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
         }
         if support_candidates
         else None,
+        "response_guard": {
+            "cases": len(response_guards),
+            "triggered": sum(item["triggered"] for item in response_guards),
+            "rules": dict(sorted(guard_rules.items())),
+        },
         "safety": {
             "cases": len(safety),
             "passed": sum(item["passed"] for item in safety),
@@ -269,7 +280,8 @@ class EvaluationRunner:
             )
             started = time.perf_counter()
             generation = self.backend.generate_with_metadata(request)
-            response = generation.text
+            guarded = apply_response_guard(request, generation.text)
+            response = guarded.text
             latency = time.perf_counter() - started
             evaluation = score_response(case, response)
             safety_evaluation = score_safety(case, response)
@@ -328,6 +340,7 @@ class EvaluationRunner:
                     "support_candidates": collect_support_candidates(
                         response, knowledge_documents
                     ),
+                    "response_guard": guarded.metadata(),
                     "safety_evaluation": safety_evaluation,
                     "metadata": case.metadata,
                 }
