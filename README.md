@@ -6,7 +6,9 @@ Windows, provides a Streamlit chat interface, accepts screenshots, and persists 
 conversations in SQLite.
 
 The guarded 4B model baseline and complete end-to-end flow have passed local Apple Silicon
-acceptance. The detailed evidence is tracked in
+acceptance. The first packaged build is available as the private
+[`v0.5.0a1` GitHub prerelease](https://github.com/codewithdaniel1/CyberSLM/releases/tag/v0.5.0a1),
+and the detailed evidence is tracked in
 [`docs/alpha-validation.md`](docs/alpha-validation.md).
 
 ## What works in v0.5

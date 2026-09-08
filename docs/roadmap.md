@@ -59,11 +59,11 @@ machine. Work should proceed in this order:
    - [x] Verify clean shutdown and restart with saved data.
    - [x] Update the final user documentation with the acceptance evidence and known limitations.
    - [x] Perform one visual browser spot-check and approve the first usable local alpha.
-   - [ ] Publish the `v0.5.0a1` GitHub prerelease.
+   - [x] Publish the `v0.5.0a1` GitHub prerelease with verified package checksums.
 
-The alpha acceptance checks are complete and `v0.5.0a1` is being prepared for publication. It
-does not require fine-tuning, additional knowledge sources, exhaustive external evaluations, or
-validation on every supported platform.
+The alpha acceptance checks are complete and `v0.5.0a1` is published. It did not require
+fine-tuning, additional knowledge sources, exhaustive external evaluations, or validation on
+every supported platform.
 
 ## Post-alpha backlog
 
