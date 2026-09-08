@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from cyberslm.benchmark import default_output_path, main, run_benchmark
+from cyberslm.benchmark import build_parser, default_output_path, main, run_benchmark
+from cyberslm.config import settings
 from cyberslm.evaluation.runner import load_dataset
 from cyberslm.model import GenerationOutput, GenerationRequest, ModelBackend
 
@@ -100,6 +101,10 @@ def test_default_benchmark_output_identifies_runtime_mode() -> None:
 
     assert transformer_path.name.endswith("-transformers-4bit-benchmark.json")
     assert mlx_path.name.endswith("-mlx-mlx-benchmark.json")
+
+
+def test_benchmark_uses_normal_chat_token_limit_by_default() -> None:
+    assert build_parser().parse_args([]).max_tokens == settings.max_tokens
 
 
 def test_benchmark_rejects_transformers_quantization_for_mlx() -> None:

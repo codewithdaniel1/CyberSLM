@@ -16,6 +16,7 @@ from cyberslm.model import (
     MockBackend,
     TransformersGemmaBackend,
     create_backend,
+    deterministic_text_analysis,
 )
 from cyberslm.modes import AUTHORIZATION_CONTEXTS, MODES, get_mode
 
@@ -97,6 +98,31 @@ def test_mock_backend_streams_and_honors_cancellation() -> None:
 
     with pytest.raises(GenerationCancelled):
         list(backend.stream(request, lambda: True))
+
+
+def test_deterministic_text_analysis_decodes_bounded_base64() -> None:
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                "Decode this Base64: ZmxhZ3tiYXNlNjRfaXNfZW5jb2Rpbmd9 and explain it."
+            ),
+        }
+    ]
+
+    assert deterministic_text_analysis(messages) == [
+        'Base64 "ZmxhZ3tiYXNlNjRfaXNfZW5jb2Rpbmd9" decodes to '
+        '"flag{base64_is_encoding}".'
+    ]
+
+
+def test_deterministic_text_analysis_ignores_unrequested_or_unsafe_values() -> None:
+    assert deterministic_text_analysis(
+        [{"role": "user", "content": "Token ZmxhZ3tiYXNlNjRfaXNfZW5jb2Rpbmd9"}]
+    ) == []
+    assert deterministic_text_analysis(
+        [{"role": "user", "content": "Decode Base64: AAECAwQFBgc="}]
+    ) == []
 
 
 def test_transformers_backend_is_lazy_and_selects_available_device() -> None:
@@ -352,7 +378,7 @@ def test_model_prompt_and_response_include_local_references() -> None:
             {
                 "title": "T1110 — Brute Force",
                 "url": "https://attack.mitre.org/techniques/T1110/",
-                "content": "ATT&CK ID: T1110",
+                "content": "ATT&CK ID: T1110 [REF-330]",
                 "source_key": "attack",
                 "source_version": "19.1",
             }
@@ -366,7 +392,9 @@ def test_model_prompt_and_response_include_local_references() -> None:
     assert "omit the mapping" in prompt
     assert "Cite every claim" in prompt
     assert "END RETRIEVED BACKGROUND" in prompt
-    assert "[1] T1110 — Brute Force" in prompt
+    assert "REFERENCE [1] T1110 — Brute Force" in prompt
+    assert "REF-330" not in prompt
+    assert prompt.endswith("synthetic canary on infrastructure controlled by the user.")
     assert "inline citations: 0/1; exact-ID citations: 0/1" in response
     assert "— not explicitly referenced" in response
     assert "https://attack.mitre.org/techniques/T1110/" in response

@@ -23,29 +23,50 @@ The retrieval suite is synthetic regression coverage, not a claim of broad produ
 OWASP remains an isolated opt-in pilot and is not used by normal chat, sync, verification, or
 background rebuilds.
 
-## Active backlog
+## Alpha finish line
 
-Work should proceed in this order:
+The immediate goal is a good working local CyberSLM on the current Apple Silicon development
+machine. Work should proceed in this order:
 
-1. **Finish cross-platform local inference.** The shared backend contract, lazy local
-   PyTorch/Transformers Gemma runtime, automatic device selection, Linux-aware setup, Windows
-   PowerShell launch/setup paths, and Linux/Windows CI contract checks are implemented. A pinned
-   tiny random Gemma checkpoint exercises real multimodal loading and generation in CI without
-   evaluating output quality. Explicit unquantized, 8-bit, and 4-bit portable memory modes are
-   implemented and smoke-tested. A reproducible full-model benchmark now records model load time,
-   generation throughput, memory, environment details, responses, and six-case quality scores.
-   Run it on representative Linux and Windows hardware, then compare quantized quality and
-   performance with the unquantized control. Keep MLX acceleration on Apple Silicon and do not add
-   a required hosted-model service.
-2. **Broaden model-quality evaluation.** Add independently sourced coverage beyond the current
-   false-refusal suite, use the existing non-executing compiler check for generated C candidates,
-   and retain human review for correctness and operational safety.
-3. **Run one controlled adapter experiment.** Assemble a separately licensed, provenance-tracked,
-   human-approved training corpus. Adopt a LoRA adapter only if it beats the RAG-only baseline on
-   held-out quality, citation, safety, and refusal evaluations.
-4. **Harden upgrades and releases.** Add explicit backup restoration tests and database migration
-   matrices. Enable private-repository provenance attestations only if the project moves to GitHub
-   Enterprise Cloud.
+1. **Validate the real model.** Current evidence is recorded in
+   [`alpha-validation.md`](alpha-validation.md).
+   - [x] Run the full `mlx-community/gemma-3-4b-it-4bit` checkpoint against the six-case cyber
+     benchmark at the normal 1,024-token limit.
+   - [x] Run the same cases through the production Auto-RAG path.
+   - [x] Inspect every response for correctness, completion, safety, retrieval use, and citation
+     behavior.
+   - [ ] Resolve the open safety and factual-accuracy blockers, then approve a release baseline.
+2. **Fix demonstrated release blockers.**
+   - [x] Prevent artificial 128-token benchmark truncation.
+   - [x] Add bounded deterministic Base64 analysis after confirming that the 4B model decoded the
+     test value incorrectly even with a minimal prompt.
+   - [x] Remove upstream CWE `[REF-*]` bibliography markers from model context so they cannot be
+     mistaken for CyberSLM citations.
+   - [ ] Stop unsafe real-file SSRF validation suggestions reliably; prompt wording alone did not.
+   - [ ] Correct remaining wrong or overstated CWE, ATT&CK, and Windows event claims.
+3. **Ship a local alpha.**
+   - [ ] Verify setup and startup on this Mac.
+   - [ ] Verify text chat, image chat, selective RAG, conversation persistence, and deletion.
+   - [ ] Verify clean shutdown and restart with saved data.
+   - [ ] Update the final user documentation and tag the first usable local alpha.
+
+The alpha is complete when these three steps pass. It does not require fine-tuning, additional
+knowledge sources, exhaustive external evaluations, or validation on every supported platform.
+
+## Post-alpha backlog
+
+These projects are useful, but they do not block the local alpha:
+
+1. Validate the full Gemma 3 4B Transformers runtime on representative Linux and Windows hardware
+   and compare unquantized, 8-bit, and 4-bit performance and quality. The portable implementation,
+   CI smoke coverage, memory modes, and benchmark tooling are already complete.
+2. Broaden independently sourced model-quality evaluations beyond the current suites, including
+   generated-code checks and retained human review.
+3. Run one controlled LoRA experiment with a separately licensed, provenance-tracked,
+   human-approved corpus. Adopt an adapter only if it beats the RAG-only baseline without weakening
+   safety, citation, or refusal behavior.
+4. Add exhaustive backup-restoration tests, database migration matrices, clean-machine release
+   testing, and any future enterprise provenance attestations.
 
 ## Deferred RAG backlog
 

@@ -194,7 +194,9 @@ they can contain complete model responses and machine details. Keep the dataset,
 device, and token limit unchanged when comparing modes. The automatic concept score is a useful
 regression signal, but it does not replace the human correctness and safety review described in
 [`evals/review-rubric.md`](evals/review-rubric.md). The full Gemma checkpoint is gated and large;
-the first benchmark may require Hugging Face access and a substantial download.
+the first benchmark may require Hugging Face access and a substantial download. By default, the
+benchmark uses the same `CYBERSLM_MAX_TOKENS` limit as normal chat so quality is not measured from
+artificially truncated answers.
 
 ## Cyber knowledge and RAG
 
@@ -449,15 +451,15 @@ safety, and refusal evaluations.
 
 ## Roadmap
 
-The v0.5 RAG phase is complete for now with ATT&CK, CWE, and CAPEC as the stable production
-sources. The OWASP work remains an isolated opt-in pilot; its pending human review and any
-D3FEND or KEV work are explicitly deferred and do not block other product work.
+The immediate finish line is a usable local alpha on Apple Silicon: validate the real Gemma 3 4B
+MLX model, fix only demonstrated correctness, safety, or core-usability blockers, and verify the
+complete local workflow. The existing ATT&CK, CWE, and CAPEC RAG stack is stable for this release.
 
-The next active milestone is cross-platform local inference for Linux and Windows while
-retaining MLX acceleration on Apple Silicon. Broader independent evaluation, one gated adapter
-experiment, and upgrade/release hardening follow it. See the single prioritized
-[`project roadmap`](docs/roadmap.md) for the complete active and deferred to-do list and the RAG
-closeout evidence.
+Full-model Linux and Windows comparisons, broader external evaluation, LoRA training, exhaustive
+upgrade testing, and additional knowledge sources are post-alpha work. See the prioritized
+[`project roadmap`](docs/roadmap.md) for the exact completion criteria and deferred backlog.
+The current full-model measurements and open release blockers are recorded in the
+[`local alpha validation report`](docs/alpha-validation.md).
 
 ## Authorization context
 

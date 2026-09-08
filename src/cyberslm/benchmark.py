@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label", help="Optional machine or run label recorded in the report")
     parser.add_argument("--limit", type=int, default=0, help="Run only the first N cases")
-    parser.add_argument("--max-tokens", type=int, default=128)
+    parser.add_argument("--max-tokens", type=int, default=settings.max_tokens)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument(
         "--device",
