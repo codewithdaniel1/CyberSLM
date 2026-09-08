@@ -35,6 +35,8 @@ machine. Work should proceed in this order:
    - [x] Run the same cases through the production Auto-RAG path.
    - [x] Inspect every response for correctness, completion, safety, retrieval use, and citation
      behavior.
+   - [x] Compare the temporary Gemma 3 12B MLX checkpoint and remove its isolated 7.5 GB cache.
+     Its higher automatic score did not survive manual factual review, so the default remains 4B.
    - [ ] Resolve the open safety and factual-accuracy blockers, then approve a release baseline.
 2. **Fix demonstrated release blockers.**
    - [x] Prevent artificial 128-token benchmark truncation.

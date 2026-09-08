@@ -5,10 +5,11 @@ Status: In progress as of 2026-09-07
 This document records the evidence used to decide whether the local CyberSLM alpha is ready. It
 does not treat automatic keyword scores as proof of correctness or safety.
 
-## Environment and model
+## Environment and models
 
 - Apple Silicon development Mac with 16 GiB unified memory
-- `mlx-community/gemma-3-4b-it-4bit`
+- Primary model: `mlx-community/gemma-3-4b-it-4bit`
+- Temporary comparison model: `mlx-community/gemma-3-12b-it-4bit`
 - MLX backend, temperature 0, maximum 1,024 generated tokens
 - Six-case `evals/datasets/smoke.jsonl` suite
 
@@ -39,6 +40,33 @@ Reducing RAG from four passages to two raised expected-reference precision to 66
 the deterministic pass rate to 4/6 and produced a worse SQL-injection verification instruction.
 The production default therefore remains four passages.
 
+### Temporary 12B comparison
+
+The 12B checkpoint was downloaded into a dedicated temporary Hugging Face cache, evaluated, and
+then removed. Its cache occupied 7.5 GB on disk; the normal 4B cache was not changed.
+
+The model-only run reported:
+
+- 4/6 deterministic concept passes and a 0.7357 mean score;
+- 12.94 aggregate generated tokens per second; and
+- six natural stop completions with no token-limit truncation.
+
+The reported 219.29-second load time includes the first model download and is not a cached-load
+measurement. The process-RSS figures also do not capture the full MLX unified-memory allocation,
+so neither value should be used as a memory-fit claim.
+
+The matched production Auto-RAG run reported 6/6 deterministic passes and a 0.7869 mean score,
+with 100% expected-reference recall and 41.7% precision at four passages. Exact-ID attribution
+remained poor: 0/5 source-using cases were complete, overall exact-ID coverage was 10%, and four
+cases required claim-support review.
+
+Manual review overruled the apparent 6/6 result. Auto RAG corrected the SSH mapping to T1110.001,
+and the 12B response used a synthetic SSRF canary without suggesting real secret files. However,
+the PowerShell response falsely claimed event 4104 records a PowerShell profile load and profile
+path; event 4104 is Script Block Logging and normally contains script-block content. The SSH
+canary explanation and SQL verification wording also contained unsupported conclusions. The
+automatic concept score detected required words, but not these contradictions.
+
 ## Manual findings
 
 Useful behavior:
@@ -64,6 +92,11 @@ Release blockers:
 
 ## Decision
 
-Do not tag the alpha yet. The next decision is whether to add a deterministic output safety gate
-for the 4B model or evaluate a stronger local checkpoint. More prompt wording is not considered a
-credible fix because matched focused tests repeatedly ignored the no-secret-file constraint.
+Do not tag the alpha yet, and do not change the default to the 12B checkpoint. The stronger model
+improved the small automatic score and SSRF behavior, but it was substantially slower and still
+produced a release-blocking Windows event error when grounded with local sources. Its temporary
+cache has been deleted as planned.
+
+The next implementation step is a deterministic post-generation safety and factual-accuracy gate
+for the specific demonstrated blockers. More prompt wording is not considered a credible fix
+because matched tests have produced both unsafe validation advice and confident factual errors.
