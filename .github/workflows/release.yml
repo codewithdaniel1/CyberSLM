@@ -51,4 +51,15 @@ jobs:
       - name: Publish tag assets to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* SHA256SUMS --verify-tag --generate-notes
+        run: |
+          release_args=("$GITHUB_REF_NAME" dist/* SHA256SUMS --verify-tag)
+          notes_file="docs/releases/${GITHUB_REF_NAME}.md"
+          if [[ -f "$notes_file" ]]; then
+            release_args+=(--notes-file "$notes_file")
+          else
+            release_args+=(--generate-notes)
+          fi
+          if [[ "$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$ ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}"

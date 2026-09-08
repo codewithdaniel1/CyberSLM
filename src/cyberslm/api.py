@@ -57,7 +57,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="CyberSLM API",
     description="Local-first multimodal cybersecurity assistant",
-    version="0.5.0",
+    version="0.5.0a1",
     lifespan=lifespan,
 )
 

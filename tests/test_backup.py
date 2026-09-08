@@ -41,7 +41,7 @@ def test_backup_copies_consistent_databases_and_uploads(tmp_path: Path, monkeypa
     assert len(manifest["files"]) == 3
     with zipfile.ZipFile(output) as archive:
         stored = json.loads(archive.read("manifest.json"))
-        assert stored["application_version"] == "0.5.0"
+        assert stored["application_version"] == "0.5.0a1"
         assert "data/cyberslm.db" in archive.namelist()
         assert "data/knowledge/knowledge.db" in archive.namelist()
         assert "data/uploads/evidence.png" in archive.namelist()

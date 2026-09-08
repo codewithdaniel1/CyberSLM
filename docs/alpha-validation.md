@@ -1,6 +1,6 @@
 # Local alpha model validation
 
-Status: Core local acceptance passed on 2026-09-07; visual browser spot-check pending
+Status: Approved for `v0.5.0a1` on 2026-09-08
 
 This document records the evidence used to decide whether the local CyberSLM alpha is ready. It
 does not treat automatic keyword scores as proof of correctness or safety.
@@ -149,7 +149,7 @@ After the run, Ruff passed, all 117 tests passed, Bash startup/setup syntax chec
 the source distribution and wheel built successfully. The 236 MB temporary acceptance data copy
 was removed after its results were recorded.
 
-The in-app browser controller was unavailable in this development session. Streamlit served its
-HTML and health endpoint, and the light theme remains covered by configuration and regression
-tests, but a person should still perform one visual chat/upload/delete spot-check before creating
-the alpha tag.
+The in-app browser controller was unavailable during automated acceptance. Streamlit served its
+HTML and health endpoint, and the light theme remained covered by configuration and regression
+tests. The project owner completed the final visual spot-check on 2026-09-08 and approved the UI
+for the first alpha.

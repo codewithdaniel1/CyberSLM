@@ -118,7 +118,7 @@ def test_load_and_run_dataset(tmp_path: Path) -> None:
     assert report["prompts_sha256"]
     assert report["prompt_contract"]["version"] == 3
     assert report["prompt_contract"]["knowledge_instruction_sha256"]
-    assert report["application_version"] == "0.5.0"
+    assert report["application_version"] == "0.5.0a1"
     assert report["knowledge"]["document_count"] == 1
     assert report["cases"][0]["knowledge"][0]["id"] == "attack:T1110"
     assert report["cases"][0]["knowledge"][0]["external_id"] == "T1110"

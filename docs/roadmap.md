@@ -1,6 +1,6 @@
 # CyberSLM roadmap
 
-Status: 2026-09-07
+Status: 2026-09-08
 
 This is the single prioritized backlog for CyberSLM. Detailed evaluation notes remain in
 `evals/`, but they do not define the order of product work.
@@ -58,11 +58,12 @@ machine. Work should proceed in this order:
      deletion against an isolated data root.
    - [x] Verify clean shutdown and restart with saved data.
    - [x] Update the final user documentation with the acceptance evidence and known limitations.
-   - [ ] Perform one visual browser spot-check and tag the first usable local alpha.
+   - [x] Perform one visual browser spot-check and approve the first usable local alpha.
+   - [ ] Publish the `v0.5.0a1` GitHub prerelease.
 
-The core acceptance checks are complete. The alpha can be tagged after the remaining visual
-browser spot-check. It does not require fine-tuning, additional knowledge sources, exhaustive
-external evaluations, or validation on every supported platform.
+The alpha acceptance checks are complete and `v0.5.0a1` is being prepared for publication. It
+does not require fine-tuning, additional knowledge sources, exhaustive external evaluations, or
+validation on every supported platform.
 
 ## Post-alpha backlog
 

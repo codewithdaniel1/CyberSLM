@@ -20,3 +20,13 @@ def test_generated_data_stays_ignored() -> None:
     ignore = (PROJECT_ROOT / ".gitignore").read_text().splitlines()
     assert "data/knowledge/*" in ignore
     assert "evals/results/*" in ignore
+
+
+def test_alpha_release_has_notes_and_is_published_as_a_prerelease() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "release.yml").read_text()
+    notes = PROJECT_ROOT / "docs" / "releases" / f"v{__version__}.md"
+
+    assert notes.is_file()
+    assert "notes_file=\"docs/releases/${GITHUB_REF_NAME}.md\"" in workflow
+    assert '"$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$' in workflow
+    assert "release_args+=(--prerelease)" in workflow

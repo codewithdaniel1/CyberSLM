@@ -1,12 +1,12 @@
 # CyberSLM
 
-CyberSLM is a private, local-first multimodal cybersecurity assistant. Version 0.5 runs Gemma
+CyberSLM is a private, local-first multimodal cybersecurity assistant. Version 0.5 alpha 1 runs Gemma
 3 4B through MLX on Apple Silicon or an optional PyTorch/Transformers runtime on Linux and
 Windows, provides a Streamlit chat interface, accepts screenshots, and persists multiple
 conversations in SQLite.
 
-The guarded 4B model baseline and core end-to-end flow have passed local Apple Silicon acceptance.
-The detailed evidence and remaining pre-tag visual spot-check are tracked in
+The guarded 4B model baseline and complete end-to-end flow have passed local Apple Silicon
+acceptance. The detailed evidence is tracked in
 [`docs/alpha-validation.md`](docs/alpha-validation.md).
 
 ## What works in v0.5
