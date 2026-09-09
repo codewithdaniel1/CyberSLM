@@ -363,6 +363,30 @@ class KnowledgeStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_documents(
+        self,
+        *,
+        source_keys: tuple[str, ...] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return complete normalized documents in deterministic order."""
+        filters = ""
+        parameters: list[Any] = []
+        if source_keys:
+            placeholders = ",".join("?" for _ in source_keys)
+            filters = f" WHERE source_key IN ({placeholders})"
+            parameters.extend(source_keys)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM knowledge_documents{filters} ORDER BY source_key, id",
+                parameters,
+            ).fetchall()
+        documents = []
+        for row in rows:
+            document = dict(row)
+            document["metadata"] = json.loads(document["metadata"])
+            documents.append(document)
+        return documents
+
     def upsert_embeddings(
         self,
         model: str,

@@ -98,9 +98,11 @@ def test_run_benchmark_captures_load_quality_throughput_and_memory(tmp_path: Pat
 def test_default_benchmark_output_identifies_runtime_mode() -> None:
     transformer_path = default_output_path("transformers", "4bit")
     mlx_path = default_output_path("mlx", "none")
+    ollama_path = default_output_path("ollama", "none")
 
     assert transformer_path.name.endswith("-transformers-4bit-benchmark.json")
     assert mlx_path.name.endswith("-mlx-mlx-benchmark.json")
+    assert ollama_path.name.endswith("-ollama-ollama-benchmark.json")
 
 
 def test_benchmark_uses_normal_chat_token_limit_by_default() -> None:
@@ -110,3 +112,12 @@ def test_benchmark_uses_normal_chat_token_limit_by_default() -> None:
 def test_benchmark_rejects_transformers_quantization_for_mlx() -> None:
     with pytest.raises(SystemExit, match="applies only"):
         main(["--backend", "mlx", "--quantization", "4bit"])
+
+
+def test_benchmark_accepts_ollama_backend() -> None:
+    parsed = build_parser().parse_args(
+        ["--backend", "ollama", "--model", "gemma3-4b-cyberslm:dev"]
+    )
+
+    assert parsed.backend == "ollama"
+    assert parsed.model == "gemma3-4b-cyberslm:dev"

@@ -1,103 +1,113 @@
-# CyberSLM roadmap
+# CyberSLM-AppSec roadmap
 
-Status: 2026-09-08
+Status: 2026-09-09
 
-This is the single prioritized backlog for CyberSLM. Detailed evaluation notes remain in
-`evals/`, but they do not define the order of product work.
+CyberSLM-AppSec is now a format-neutral application-security model project. The v0.5
+Streamlit/FastAPI application is historical; current work focuses on secure-code review,
+vulnerability explanation, minimal remediation, safe verification, and portable model artifacts.
 
-## Current checkpoint
+## Artifact contract
 
-The v0.5 local RAG phase is complete for now. The production path uses only the pinned MITRE
-ATT&CK, CWE, and CAPEC sources. It includes selective Auto/On/Off routing, hybrid FTS5 and local
-embedding retrieval, source previews, source-disclosure footers, citation diagnostics, verified
-rebuilds, and reproducible evaluations.
+The canonical release input is a local standard Safetensors/PEFT checkpoint named from its exact
+base family and size, initially `gemma3-4b-cyberslm-appsec`. Hugging Face Hub publication is
+deferred.
 
-The closeout checks on 2026-09-07 reported:
+1. A PEFT adapter is the small, inspectable training artifact.
+2. A merged Safetensors checkpoint is derived for standard Transformers use.
+3. GGUF quantizations are derived from that accepted checkpoint for Ollama and llama.cpp.
+4. MLX artifacts may be derived for Apple Silicon.
+5. RAG indexes remain external, replaceable knowledge packages.
 
-- all three source files and index manifests verified;
-- 2,200 documents, 4,096 passages, and 4,096/4,096 local embeddings present;
-- 48/48 selective-routing cases correct; and
-- the established hybrid retrieval baseline unchanged at 15/20 expected-reference cases (75%).
+Every derivative must record the base revision, dataset hash, chat template, training settings,
+merge method, converter revision, and quantization.
 
-The retrieval suite is synthetic regression coverage, not a claim of broad production quality.
-OWASP remains an isolated opt-in pilot and is not used by normal chat, sync, verification, or
-background rebuilds.
+## Current milestone: universal training foundation
 
-## Alpha finish line
+1. **Remove the application layer.**
+   - [x] Remove Streamlit, FastAPI, conversation storage, backup code, and launchers.
+   - [x] Remove their runtime dependencies and app-only tests.
+   - [x] Preserve ignored local user data rather than deleting it during source cleanup.
+2. **Make reviewed data portable.**
+   - [x] Retain the license, privacy, reviewer, and corpus-hash gate.
+   - [x] Export `train.jsonl` and `validation.jsonl` with standard chat `messages` records.
+   - [x] Emit dataset metadata that locks the source corpus hash and exact base model.
+3. **Establish local Safetensors as the canonical model format.**
+   - [x] Allow the Transformers evaluator to load standard local PEFT adapters.
+   - [ ] Add artifact validation for PEFT configuration, tokenizer, chat template, and training
+     metadata.
+   - [ ] Add an explicit merge command that produces portable Safetensors without publishing.
+   - [ ] Generate SHA-256 manifests for every adapter, merged-model, tokenizer, and metadata file.
+4. **Add reproducible Unsloth training.**
+   - [x] Export the verified CWE 4.20 and CAPEC 3.9 documents as deterministic raw-text
+     train/validation JSONL with record provenance and SHA-256 manifests.
+   - [x] Add a guarded Gemma 3 4B Unsloth runner with a hash-verified, no-download preflight.
+   - [x] Document a separate five-step Colab smoke run before the full candidate run.
+   - [ ] Run the exported corpus through that runner on NVIDIA/Colab.
+   - [x] Make the runner capture exact package versions, base revision, corpus hash, metrics, and
+     hyperparameters in `cyberslm-training.json`.
+   - [ ] Produce the first PEFT adapter and merged 16-bit Hugging Face checkpoint on NVIDIA/Colab.
+   - [ ] Re-import the adapter with plain Transformers and verify output parity.
+   - [x] Add a held-out AppSec comparison suite and establish Gemma 3 4B and
+     Foundation-Sec-8B-Instruct baselines.
+   - [ ] Human-approve the AppSec comparison labels and blind-review all baseline responses.
+   - [ ] If the corrected Gemma candidate cannot beat Foundation-Sec on the human-reviewed gate,
+     validate Foundation-Sec Safetensors as the next Unsloth training base.
+5. **Derive deployment formats.**
+   - [ ] Export GGUF from the accepted merged checkpoint and validate its chat template.
+   - [ ] Create `gemma3-4b-cyberslm-appsec:0.1` in Ollama from that GGUF.
+   - [ ] Derive and validate MLX weights if the conversion preserves required capabilities.
+   - [ ] Package the accepted PEFT adapter and sharded merged Safetensors for Unsloth and
+     Transformers users.
+   - [ ] Package the accepted GGUF plus Modelfile and reconstruction instructions for Ollama
+     users.
+   - [ ] Keep every GitHub Release asset below 2 GiB and generate SHA-256 hashes for both parts
+     and reconstructed artifacts.
+   - [ ] Publish a versioned GitHub Release only after license and evaluation approval.
+6. **Package RAG as a companion artifact.**
+   - [ ] Export normalized ATT&CK/CWE/CAPEC documents with source versions and SHA-256 manifests.
+   - [ ] Document attaching that bundle to `gemma3-4b-cyberslm-appsec` in Open WebUI.
+   - [ ] Keep the existing CyberSLM retriever available for reproducible evaluation and stricter
+     citation controls.
+   - [ ] Verify that running the model without the companion bundle remains a valid no-RAG mode.
 
-The immediate goal is a good working local CyberSLM on the current Apple Silicon development
-machine. Work should proceed in this order:
+Hugging Face Hub upload and hosted inference are explicitly deferred. GitHub Releases are the
+initial public distribution channel once the local Safetensors-to-Ollama pipeline produces an
+accepted CyberSLM-AppSec model.
 
-1. **Validate the real model.** Current evidence is recorded in
-   [`alpha-validation.md`](alpha-validation.md).
-   - [x] Run the full `mlx-community/gemma-3-4b-it-4bit` checkpoint against the six-case cyber
-     benchmark at the normal 1,024-token limit.
-   - [x] Run the same cases through the production Auto-RAG path.
-   - [x] Inspect every response for correctness, completion, safety, retrieval use, and citation
-     behavior.
-   - [x] Compare the temporary Gemma 3 12B MLX checkpoint and remove its isolated 7.5 GB cache.
-     Its higher automatic score did not survive manual factual review, so the default remains 4B.
-   - [x] Resolve the reproduced safety and factual-accuracy blockers and approve the guarded 4B
-     model-response baseline for end-to-end alpha verification.
-2. **Fix demonstrated release blockers.**
-   - [x] Prevent artificial 128-token benchmark truncation.
-   - [x] Add bounded deterministic Base64 analysis after confirming that the 4B model decoded the
-     test value incorrectly even with a minimal prompt.
-   - [x] Remove upstream CWE `[REF-*]` bibliography markers from model context so they cannot be
-     mistaken for CyberSLM citations.
-   - [x] Block the demonstrated sensitive-target SSRF instructions before answer release; prompt
-     wording alone did not.
-   - [x] Correct the demonstrated failed-SSH ATT&CK mapping, Python SQL fix, and PowerShell 4104
-     interpretation with narrow, transparent deterministic rules.
-   - [x] Re-run the guarded production Auto-RAG suite with the default 4B model and manually
-     approve all six released responses. The result was 5/6 automatic passes and 6/6 accepted by
-     manual review; the remaining miss was a Base64 phrasing false negative.
-3. **Ship a local alpha.**
-   - [x] Verify setup and startup on this Mac.
-   - [x] Verify real 4B text chat, image chat, selective RAG, conversation persistence, and
-     deletion against an isolated data root.
-   - [x] Verify clean shutdown and restart with saved data.
-   - [x] Update the final user documentation with the acceptance evidence and known limitations.
-   - [x] Perform one visual browser spot-check and approve the first usable local alpha.
-   - [x] Publish the `v0.5.0a1` GitHub prerelease with verified package checksums.
+## Evaluation gate
 
-The alpha acceptance checks are complete and `v0.5.0a1` is published. It did not require
-fine-tuning, additional knowledge sources, exhaustive external evaluations, or validation on
-every supported platform.
+The untouched predecessor `gemma3-4b-cyberslm:dev` Ollama baseline completed the six-case suite at 1,024
+tokens. No-RAG scored 5/6 automatic passes with no truncation; the remaining Base64 answer was a
+wording false negative. Auto-RAG scored 4/6 and revealed an unsafe SSRF validation suggestion plus
+weak citation attribution.
 
-## Post-alpha backlog
+Before fine-tuning results can be promoted:
 
-These projects are useful, but they do not block the local alpha:
+- resolve and rerun the Ollama Auto-RAG safety/citation regression;
+- compare the same held-out prompts across Transformers/PEFT, Unsloth, merged Safetensors, and
+  GGUF/Ollama;
+- confirm that chat-template differences do not change behavior materially;
+- retain human review for safety and factual correctness; and
+- require the candidate to beat the untouched base without increasing unsafe compliance or false
+  refusals.
 
-1. Validate the full Gemma 3 4B Transformers runtime on representative Linux and Windows hardware
-   and compare unquantized, 8-bit, and 4-bit performance and quality. The portable implementation,
-   CI smoke coverage, memory modes, and benchmark tooling are already complete.
-2. Broaden independently sourced model-quality evaluations beyond the current suites, including
-   generated-code checks and retained human review.
-3. Run one controlled LoRA experiment with a separately licensed, provenance-tracked,
-   human-approved corpus. Adopt an adapter only if it beats the RAG-only baseline without weakening
-   safety, citation, or refusal behavior.
-4. Add exhaustive backup-restoration tests, database migration matrices, clean-machine release
-   testing, and any future enterprise provenance attestations.
+## RAG scope
 
-## Deferred RAG backlog
+The pinned MITRE ATT&CK, CWE, and CAPEC pipeline remains the reference RAG implementation. Its
+index is not included in model weights or uploaded with the model. Future work may expose
+framework-neutral retrieval output or package normalized documents for standard RAG tools.
 
-These items are deliberately postponed and do not block other work:
+Additional knowledge-source experiments remain deferred until the first universal checkpoint is
+validated.
 
-1. Review or revise the 24 OWASP pilot labels and the six-case claim-support draft.
-2. Run a broader held-out OWASP answer-quality comparison and decide whether to admit it or keep
-   it as a developer-only pilot.
-3. Pilot MITRE D3FEND as a pinned defensive-technique source.
-4. Pilot CISA KEV as an exact-CVE local lookup rather than default semantic context.
-5. Revisit NVD, OSV, Sigma, EPSS, or NIST OSCAL only when a concrete product mode needs them.
+## Deferred
 
-When RAG work resumes, every new source must still pass the provenance, licensing, parser,
-held-out retrieval, attribution, safety, and regression gates in
-[`knowledge-source-evaluation.md`](knowledge-source-evaluation.md).
+- A custom chat UI, conversation database, or hosted application
+- Automatic training on conversations, uploads, evaluation responses, or raw RAG documents
+- Full training on the local 16 GB Mac when an NVIDIA/Colab run is more reproducible
+- Multiple base-model families before the Gemma 3 pipeline works end to end
+- Hugging Face Hub publishing or hosted inference
+- Agent or MCP integration
 
-## Explicitly out of scope for now
-
-- Training on private conversations or uploads
-- Automatically enabling experimental knowledge sources
-- Requiring an MCP or agent harness for normal chat
-- Requiring a hosted model or external request during chat
+Historical v0.5 application evidence remains in `docs/alpha-validation.md` and
+`docs/releases/v0.5.0a1.md`.

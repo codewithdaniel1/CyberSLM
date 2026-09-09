@@ -13,8 +13,8 @@ def test_data_directory_override_moves_all_runtime_data(
     configured = Settings()
 
     assert configured.data_dir == data_dir
-    assert configured.upload_dir == data_dir / "uploads"
-    assert configured.database_path == data_dir / "cyberslm.db"
+    assert configured.training_dir == data_dir / "training"
+    assert configured.adapter_dir == data_dir / "adapters"
     assert configured.knowledge_dir == data_dir / "knowledge"
     assert configured.knowledge_database_path == data_dir / "knowledge" / "knowledge.db"
     assert configured.embedding_cache_dir == data_dir / "knowledge" / "models"

@@ -12,6 +12,8 @@ from pathlib import Path
 from queue import Empty
 from typing import Any
 
+import httpx
+
 from cyberslm.config import Settings
 from cyberslm.modes import Mode
 
@@ -39,7 +41,7 @@ STRICT_KNOWLEDGE_PROMPT_INSTRUCTION = (
     "facts with wording such as 'Given your description' without a citation. Never turn a "
     "reference's conditional checks into asserted facts about the user's system."
 )
-MODEL_BACKEND_NAMES = ("mlx", "transformers", "mock")
+MODEL_BACKEND_NAMES = ("ollama", "mlx", "transformers", "mock")
 BASE64_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{8,}={0,2}(?![A-Za-z0-9+/=])")
 
 @dataclass(frozen=True, slots=True)
@@ -107,11 +109,11 @@ def deterministic_text_analysis(messages: list[dict[str, Any]]) -> list[str]:
     return results
 
 
-def build_model_prompt(request: GenerationRequest) -> str:
+def build_model_prompt(request: GenerationRequest, *, include_system: bool = True) -> str:
     """Build the backend-independent CyberSLM transcript and RAG context."""
-    transcript: list[str] = [
-        request.mode.build_system_prompt(request.authorization_context),
-    ]
+    transcript: list[str] = []
+    if include_system:
+        transcript.append(request.mode.build_system_prompt(request.authorization_context))
     if request.knowledge_documents:
         references = [request.knowledge_instruction or KNOWLEDGE_PROMPT_INSTRUCTION]
         for index, document in enumerate(request.knowledge_documents, start=1):
@@ -308,8 +310,8 @@ class MockBackend(ModelBackend):
         response = (
             f"**Mock {request.mode.name} response**\n\n"
             f"CyberSLM received: “{user_message[:300]}”{image_note}\n\n"
-            "The application path is working. Use the `mlx` backend on Apple Silicon or the "
-            "`transformers` backend on Linux and Windows for real local Gemma responses."
+            "The application path is working. Use the `ollama` backend for the new distribution "
+            "path, or the legacy `mlx` and `transformers` backends for direct local inference."
         )
         return response + source_footer(request.knowledge_documents, response)
 
@@ -330,6 +332,167 @@ class MockBackend(ModelBackend):
     @property
     def status(self) -> dict[str, Any]:
         return {"backend": "mock", "loaded": True, "detail": "Development backend"}
+
+
+class OllamaBackend(ModelBackend):
+    """Local Ollama runtime for base, fine-tuned, or imported GGUF models."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self._loaded = False
+        self._model_details: dict[str, Any] | None = None
+        self._load_error: str | None = None
+        self._lock = threading.Lock()
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(
+            base_url=self.settings.ollama_base_url,
+            timeout=self.settings.ollama_timeout,
+        )
+
+    def _load(self) -> None:
+        if self._loaded:
+            return
+        try:
+            with self._client() as client:
+                response = client.post("/api/show", json={"model": self.settings.model_id})
+                response.raise_for_status()
+                self._model_details = response.json()
+            self._loaded = True
+            self._load_error = None
+        except Exception as exc:  # pragma: no cover - depends on local Ollama service
+            self._load_error = f"{type(exc).__name__}: {exc}"
+            raise RuntimeError(
+                "Unable to load the Ollama model. Start Ollama, pull or create "
+                f"`{self.settings.model_id}`, and verify CYBERSLM_OLLAMA_BASE_URL. "
+                f"Original error: {self._load_error}"
+            ) from exc
+
+    def load(self) -> None:
+        with self._lock:
+            self._load()
+
+    def _payload(self, request: GenerationRequest, *, stream: bool) -> dict[str, Any]:
+        return {
+            "model": self.settings.model_id,
+            "prompt": build_model_prompt(request, include_system=False),
+            # Override any SYSTEM baked into an Ollama Modelfile. The repository prompt below is
+            # already backend-independent; an explicit override keeps base, candidate, and
+            # third-party model evaluations comparable instead of silently stacking prompts.
+            "system": request.mode.build_system_prompt(request.authorization_context),
+            "images": [
+                base64.b64encode(path.read_bytes()).decode("ascii")
+                for path in request.image_paths
+            ],
+            "stream": stream,
+            "options": {
+                "num_ctx": self.settings.ollama_context_size,
+                "num_predict": self.settings.max_tokens,
+                "temperature": self.settings.temperature,
+            },
+        }
+
+    def generate(self, request: GenerationRequest) -> str:
+        return self.generate_with_metadata(request).text
+
+    def generate_with_metadata(self, request: GenerationRequest) -> GenerationOutput:
+        metadata: dict[str, Any] = {}
+        text = "".join(self._stream(request, completed=metadata.update, stream=False))
+        return GenerationOutput(
+            text=text,
+            finish_reason=metadata.get("finish_reason", "unknown"),
+            prompt_tokens=metadata.get("prompt_tokens"),
+            generated_tokens=metadata.get("generated_tokens"),
+            max_tokens=self.settings.max_tokens,
+        )
+
+    def stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        yield from self._stream(request, cancelled=cancelled, stream=True)
+
+    def _stream(
+        self,
+        request: GenerationRequest,
+        cancelled: Callable[[], bool] | None = None,
+        completed: Callable[[dict[str, Any]], None] | None = None,
+        *,
+        stream: bool,
+    ) -> Iterator[str]:
+        if cancelled and cancelled():
+            raise GenerationCancelled
+        with self._lock:
+            self._load()
+            emitted_text: list[str] = []
+            final: dict[str, Any] = {}
+            try:
+                with self._client() as client:
+                    if stream:
+                        with client.stream(
+                            "POST", "/api/generate", json=self._payload(request, stream=True)
+                        ) as response:
+                            response.raise_for_status()
+                            for line in response.iter_lines():
+                                if cancelled and cancelled():
+                                    raise GenerationCancelled
+                                if not line:
+                                    continue
+                                item = json.loads(line)
+                                piece = str(item.get("response", ""))
+                                if piece:
+                                    emitted_text.append(piece)
+                                    yield piece
+                                if item.get("done"):
+                                    final = item
+                    else:
+                        response = client.post(
+                            "/api/generate", json=self._payload(request, stream=False)
+                        )
+                        response.raise_for_status()
+                        final = response.json()
+                        piece = str(final.get("response", ""))
+                        if piece:
+                            emitted_text.append(piece)
+                            yield piece
+
+                if completed is not None:
+                    completed(
+                        {
+                            "finish_reason": final.get("done_reason") or "unknown",
+                            "prompt_tokens": final.get("prompt_eval_count"),
+                            "generated_tokens": final.get("eval_count"),
+                        }
+                    )
+                if not emitted_text:
+                    empty_response = "The model returned an empty response."
+                    emitted_text.append(empty_response)
+                    yield empty_response
+                footer = source_footer(request.knowledge_documents, "".join(emitted_text))
+                if footer:
+                    yield footer
+            except GenerationCancelled:
+                raise
+            except Exception as exc:  # pragma: no cover - depends on local Ollama service
+                raise RuntimeError(
+                    f"Ollama generation failed: {type(exc).__name__}: {exc}"
+                ) from exc
+
+    @property
+    def status(self) -> dict[str, Any]:
+        details = (self._model_details or {}).get("details", {})
+        return {
+            "backend": "ollama",
+            "loaded": self._loaded,
+            "model_id": self.settings.model_id,
+            "base_url": self.settings.ollama_base_url,
+            "format": details.get("format"),
+            "family": details.get("family"),
+            "parameter_size": details.get("parameter_size"),
+            "quantization": details.get("quantization_level"),
+            "error": self._load_error,
+        }
 
 
 class MLXGemmaBackend(ModelBackend):
@@ -517,11 +680,6 @@ class TransformersGemmaBackend(ModelBackend):
     def _load(self) -> None:
         if self._model is not None:
             return
-        if self.settings.adapter_path is not None:
-            raise RuntimeError(
-                "CYBERSLM_ADAPTER_PATH currently supports only the MLX backend. "
-                "Unset it before using the transformers backend."
-            )
         try:
             import torch
             from transformers import (
@@ -563,6 +721,13 @@ class TransformersGemmaBackend(ModelBackend):
                 self.settings.model_id,
                 **model_options,
             )
+            if self.settings.adapter_path is not None:
+                from peft import PeftModel
+
+                self._model = PeftModel.from_pretrained(
+                    self._model,
+                    str(self.settings.adapter_path),
+                )
             if quantization == "none":
                 self._model.to(self._device)
             self._model.eval()
@@ -576,7 +741,8 @@ class TransformersGemmaBackend(ModelBackend):
             raise RuntimeError(
                 "Unable to load the local Transformers model. Install the portable runtime "
                 "with `uv sync --extra transformers`, accept the Gemma license on Hugging "
-                "Face if requested, and verify the model ID, device, and quantization mode. "
+                "Face if requested, and verify the model ID, PEFT adapter, device, and "
+                "quantization mode. "
                 f"Original error: {self._load_error}"
             ) from exc
 
@@ -748,7 +914,9 @@ class TransformersGemmaBackend(ModelBackend):
             "dtype": dtype,
             "quantization": self.settings.transformers_quantization,
             "memory_footprint_bytes": self._memory_footprint_bytes,
-            "adapter_path": None,
+            "adapter_path": (
+                str(self.settings.adapter_path) if self.settings.adapter_path else None
+            ),
             "error": self._load_error,
         }
 
@@ -756,6 +924,8 @@ class TransformersGemmaBackend(ModelBackend):
 def create_backend(settings: Settings) -> ModelBackend:
     if settings.model_backend == "mock":
         return MockBackend()
+    if settings.model_backend == "ollama":
+        return OllamaBackend(settings)
     if settings.model_backend == "mlx":
         return MLXGemmaBackend(settings)
     if settings.model_backend == "transformers":

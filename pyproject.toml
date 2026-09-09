@@ -1,33 +1,30 @@
 [project]
 name = "cyberslm"
 version = "0.5.0a1"
-description = "A private, local-first multimodal cybersecurity assistant."
+description = "A portable application-security model training, evaluation, RAG, and export toolkit."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "fastembed>=0.8,<1",
-  "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
-  "pillow>=11,<13",
   "psutil>=5.9,<8",
   "python-dotenv>=1.1,<2",
-  "python-multipart>=0.0.20,<1",
-  "streamlit>=1.48,<2",
-  "uvicorn[standard]>=0.35,<1",
 ]
 
 [project.scripts]
-cyberslm-backup = "cyberslm.backup:main"
 cyberslm-benchmark = "cyberslm.benchmark:main"
 cyberslm-eval = "cyberslm.evaluation.cli:main"
 cyberslm-knowledge = "cyberslm.knowledge.cli:main"
 cyberslm-train = "cyberslm.training.cli:main"
+cyberslm-unsloth = "cyberslm.training.unsloth_run:main"
 
 [project.optional-dependencies]
 mlx = ["mlx-vlm>=0.3.4,<1"]
 transformers = [
   "accelerate>=1.7,<2",
   "bitsandbytes>=0.48,<1",
+  "peft>=0.17,<1",
+  "pillow>=11,<13",
   "sentencepiece>=0.2,<1",
   "torch>=2.7,<3",
   "transformers>=5,<6",

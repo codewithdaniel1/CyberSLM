@@ -64,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     retrieval.add_argument(
         "--auto-route",
         action="store_true",
-        help="Apply the same Auto source routing used by chat before retrieval",
+        help="Apply the production Auto source-routing policy before retrieval",
     )
     retrieval.add_argument(
         "--additional-source",
@@ -93,13 +93,19 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--backend", choices=MODEL_BACKEND_NAMES, default=settings.model_backend)
     run.add_argument("--model", default=None)
     run.add_argument("--max-tokens", type=int, default=settings.max_tokens)
+    run.add_argument(
+        "--ollama-context-size",
+        type=int,
+        default=settings.ollama_context_size,
+        help="Context size sent to Ollama so model comparisons use equal memory settings",
+    )
     run.add_argument("--temperature", type=float, default=0.0)
     rag_policy = run.add_mutually_exclusive_group()
     rag_policy.add_argument(
         "--rag-policy",
         choices=("auto", "on", "off"),
         default="auto",
-        help="Per-case local knowledge policy (default: auto, matching chat)",
+        help="Per-case local knowledge policy (default: auto)",
     )
     rag_policy.add_argument(
         "--no-rag",
@@ -310,8 +316,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings,
         model_backend=args.backend,
         model_id=model_id,
+        adapter_path=(
+            settings.adapter_path if args.backend in {"mlx", "transformers"} else None
+        ),
         max_tokens=args.max_tokens,
         temperature=args.temperature,
+        ollama_context_size=args.ollama_context_size,
     )
     backend = create_backend(run_settings)
     knowledge_store = None
@@ -346,6 +356,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "backend": args.backend,
             "model_id": model_id,
             "max_tokens": args.max_tokens,
+            "ollama_context_size": (
+                args.ollama_context_size if args.backend == "ollama" else None
+            ),
             "temperature": args.temperature,
             "limit": args.limit or None,
             "rag_enabled": knowledge_store is not None,

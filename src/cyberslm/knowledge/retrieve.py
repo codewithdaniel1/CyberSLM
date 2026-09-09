@@ -130,7 +130,7 @@ def decide_retrieval(
     enabled: bool = True,
     additional_source_keys: tuple[str, ...] = (),
 ) -> RetrievalDecision:
-    """Decide whether a chat turn should consult the local knowledge index."""
+    """Decide whether a model request should consult the local knowledge index."""
     normalized_policy = policy.strip().casefold()
     if normalized_policy not in RAG_POLICIES:
         raise ValueError("Knowledge policy must be one of: auto, on, off")

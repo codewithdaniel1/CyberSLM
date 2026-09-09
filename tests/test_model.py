@@ -1,19 +1,22 @@
+import json
 import sys
 from contextlib import nullcontext
 from pathlib import Path
 from queue import Queue
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 import cyberslm.config as config_module
-from cyberslm.config import DEFAULT_TRANSFORMERS_MODEL_ID, Settings
+from cyberslm.config import DEFAULT_OLLAMA_MODEL_ID, DEFAULT_TRANSFORMERS_MODEL_ID, Settings
 from cyberslm.model import (
     STRICT_KNOWLEDGE_PROMPT_INSTRUCTION,
     GenerationCancelled,
     GenerationRequest,
     MLXGemmaBackend,
     MockBackend,
+    OllamaBackend,
     TransformersGemmaBackend,
     create_backend,
     deterministic_text_analysis,
@@ -168,6 +171,123 @@ def test_auto_backend_uses_platform_specific_runtime(monkeypatch) -> None:
     assert windows.model_id == DEFAULT_TRANSFORMERS_MODEL_ID
 
 
+def test_ollama_backend_uses_local_api_and_preserves_generation_metadata(
+    tmp_path: Path,
+) -> None:
+    image = tmp_path / "evidence.png"
+    image.write_bytes(b"test-image")
+    requests: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        requests.append({"path": request.url.path, "payload": payload})
+        if request.url.path == "/api/show":
+            return httpx.Response(
+                200,
+                json={
+                    "details": {
+                        "format": "gguf",
+                        "family": "gemma3",
+                        "parameter_size": "4.3B",
+                        "quantization_level": "Q4_K_M",
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "response": "Inspect the evidence safely.",
+                "done": True,
+                "done_reason": "stop",
+                "prompt_eval_count": 42,
+                "eval_count": 7,
+            },
+        )
+
+    backend = OllamaBackend(
+        Settings(model_backend="ollama", model_id="gemma3-4b-cyberslm:dev")
+    )
+    backend._client = lambda: httpx.Client(  # type: ignore[method-assign]
+        transport=httpx.MockTransport(handler),
+        base_url="http://ollama.test",
+    )
+    output = backend.generate_with_metadata(
+        GenerationRequest(
+            mode=MODES["forensics"],
+            messages=[{"role": "user", "content": "Inspect this image"}],
+            image_paths=[image],
+        )
+    )
+
+    assert output.text == "Inspect the evidence safely."
+    assert output.finish_reason == "stop"
+    assert output.prompt_tokens == 42
+    assert output.generated_tokens == 7
+    assert requests[0] == {
+        "path": "/api/show",
+        "payload": {"model": "gemma3-4b-cyberslm:dev"},
+    }
+    generation = requests[1]["payload"]
+    assert isinstance(generation, dict)
+    assert generation["model"] == "gemma3-4b-cyberslm:dev"
+    assert generation["system"] == MODES["forensics"].build_system_prompt("unspecified")
+    assert generation["images"]
+    assert generation["stream"] is False
+    assert generation["options"] == {
+        "num_ctx": 4096,
+        "num_predict": 1024,
+        "temperature": 0.2,
+    }
+    assert backend.status == {
+        "backend": "ollama",
+        "loaded": True,
+        "model_id": "gemma3-4b-cyberslm:dev",
+        "base_url": "http://127.0.0.1:11434",
+        "format": "gguf",
+        "family": "gemma3",
+        "parameter_size": "4.3B",
+        "quantization": "Q4_K_M",
+        "error": None,
+    }
+
+
+def test_ollama_is_available_as_an_explicit_backend() -> None:
+    backend = create_backend(Settings(model_backend="ollama", model_id=""))
+
+    assert isinstance(backend, OllamaBackend)
+    assert backend.status["model_id"] == DEFAULT_OLLAMA_MODEL_ID
+
+
+def test_ollama_backend_streams_ndjson_and_honors_early_cancellation() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json={"details": {"format": "gguf"}})
+        return httpx.Response(
+            200,
+            content=(
+                b'{"response":"first ","done":false}\n'
+                b'{"response":"second","done":true,"done_reason":"stop",'
+                b'"prompt_eval_count":10,"eval_count":2}\n'
+            ),
+            headers={"content-type": "application/x-ndjson"},
+        )
+
+    backend = OllamaBackend(Settings(model_backend="ollama", model_id="test-model"))
+    backend._client = lambda: httpx.Client(  # type: ignore[method-assign]
+        transport=httpx.MockTransport(handler),
+        base_url="http://ollama.test",
+    )
+    request = GenerationRequest(
+        mode=MODES["general"],
+        messages=[{"role": "user", "content": "Hello"}],
+        image_paths=[],
+    )
+
+    assert "".join(backend.stream(request)) == "first second"
+    with pytest.raises(GenerationCancelled):
+        list(backend.stream(request, lambda: True))
+
+
 def test_transformers_backend_rejects_unavailable_explicit_device() -> None:
     backend = TransformersGemmaBackend(
         Settings(model_backend="transformers", model_id=DEFAULT_TRANSFORMERS_MODEL_ID)
@@ -188,17 +308,64 @@ def test_transformers_quantization_mode_is_validated() -> None:
         Settings(transformers_quantization="int2")
 
 
-def test_transformers_backend_rejects_mlx_adapter_before_importing_runtime(tmp_path: Path) -> None:
+def test_transformers_backend_loads_hugging_face_peft_adapter(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class FakeProcessorLoader:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs):
+            return object()
+
+    class FakeModel:
+        def to(self, device: str) -> None:
+            calls["to"] = device
+
+        def eval(self) -> None:
+            calls["eval"] = True
+
+    class FakeModelLoader:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs):
+            return FakeModel()
+
+    class FakePeftModel:
+        @classmethod
+        def from_pretrained(cls, model, adapter_path: str):
+            calls["adapter"] = (model, adapter_path)
+            return model
+
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+        float32="float32",
+        float16="float16",
+        bfloat16="bfloat16",
+    )
+    fake_transformers = SimpleNamespace(
+        AutoProcessor=FakeProcessorLoader,
+        BitsAndBytesConfig=object,
+        Gemma3ForConditionalGeneration=FakeModelLoader,
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    monkeypatch.setitem(sys.modules, "peft", SimpleNamespace(PeftModel=FakePeftModel))
+    adapter = tmp_path / "hf-peft-adapter"
     backend = TransformersGemmaBackend(
         Settings(
             model_backend="transformers",
             model_id=DEFAULT_TRANSFORMERS_MODEL_ID,
-            adapter_path=tmp_path / "adapter.safetensors",
+            adapter_path=adapter,
+            transformers_device="cpu",
         )
     )
 
-    with pytest.raises(RuntimeError, match="currently supports only the MLX backend"):
-        backend._load()
+    backend._load()
+
+    assert calls["adapter"][1] == str(adapter)
+    assert backend.status["adapter_path"] == str(adapter)
 
 
 @pytest.mark.parametrize(

@@ -12,16 +12,12 @@ privacy, licensing, and reproducibility requirements.
 | Cyber mode prompts | `src/cyberslm/modes.py` | Yes | Task behavior and response structures |
 | Evaluation datasets | `evals/datasets/` | Yes | Reproducible measurement, never training |
 | Evaluation reports | `evals/results/` | No | Local model outputs and scores |
-| Conversations | `data/cyberslm.db` | No | Private chat history, never training by default |
-| Uploaded screenshots | `data/uploads/` | No | Private conversation attachments |
 | Reviewed training corpus | `data/training/` | No | Explicitly assembled optional LoRA input |
 | Candidate adapters | `data/adapters/` | No | Local experimental weights and metadata |
-| Private backup archives | `backups/` | No | Integrity-checked DB, index, and upload snapshots |
 
-There is currently **no shipped fine-tuning corpus or adapter**. CyberSLM 0.5 is specialized
-through cyber prompts and retrieval, not modified weights by default. Its optional adapter
-workflow requires a separately reviewed manifest and corpus; private chat history, uploaded
-evidence, and evaluation answers are never silently converted into training data.
+There is currently **no shipped fine-tuning corpus or adapter**. The training workflow requires a
+separately reviewed manifest and corpus; private data, raw RAG documents, and evaluation answers
+are never silently converted into training data.
 
 ## Synchronize knowledge
 
@@ -37,7 +33,7 @@ This downloads and indexes the pinned sources:
 
 The normal command intentionally excludes sources that have not passed their admission
 benchmark. The first opt-in pilot is a reviewed 24-document subset of the OWASP Cheat Sheet
-Series. Developers can evaluate it without changing default chat routing:
+Series. Developers can evaluate it without changing the default retrieval source set:
 
 ```bash
 uv run cyberslm-knowledge sync --source owasp
@@ -45,8 +41,8 @@ uv run cyberslm-knowledge verify --source owasp
 ```
 
 Its repository commit, archive hash, document allowlist, parser, and attribution notice are
-committed. Normal `sync` and `verify`, the in-app rebuild, and chat source routing continue to
-use only ATT&CK, CWE, and CAPEC until the pilot is admitted.
+committed. Normal `sync`, `verify`, and evaluation routing continue to use only ATT&CK, CWE, and
+CAPEC until the pilot is admitted.
 
 Inspect the local store:
 
@@ -58,14 +54,9 @@ uv run cyberslm-knowledge search "failed SSH logins brute force" --mode defensiv
 uv run cyberslm-knowledge search "CWE-89 SQL injection" --mode secure_code --json
 ```
 
-The Streamlit sidebar exposes the same operation under **Knowledge and updates**. The API runs
-one background sync at a time, reports source/embedding progress, and preserves the existing
-index if a download or validation fails.
-
-The app still works when the index is absent. The sidebar will say `RAG empty`, and model
-answers will use only Gemma and the selected mode prompt. Set `CYBERSLM_RAG_ENABLED=false`
-to disable retrieval without deleting the local index. This is a master switch and cannot be
-overridden by the per-message control.
+The CLI reports source and embedding progress and preserves the existing index if a download or
+validation fails. Evaluations still work when the index is absent and can run with RAG disabled.
+Set `CYBERSLM_RAG_ENABLED=false` to disable retrieval without deleting the local index.
 
 ## Retrieval behavior
 
@@ -77,8 +68,8 @@ policies:
 - **On** always attempts a search, which is useful when the automatic gate misses a query.
 - **Off** skips local retrieval for that message.
 
-The request API accepts these values in the `rag_policy` form field and includes its decision
-and reason in the returned `rag` object. When a search proceeds:
+The evaluation runner accepts these policies and records its decision and reason. When a search
+proceeds:
 
 1. Source documents are deterministically split into overlapping passages.
 2. The latest question is searched with SQLite FTS5 and a local BGE embedding.
@@ -88,12 +79,12 @@ and reason in the returned `rag` object. When a search proceeds:
 6. CyberSLM is asked to cite relevant references as `[1]`, `[2]`, and so on.
 7. The backend appends the exact consulted titles and URLs to the response deterministically.
 
-No external request occurs during chat. Network access is used only when the user explicitly
-runs the knowledge synchronization or embedding command.
+Network access is used only when the user explicitly runs knowledge synchronization or initially
+downloads the configured embedding model.
 
 The first `sync` also downloads the configured FastEmbed ONNX model and builds local vectors.
-Normal API and UI requests use local-only model loading; they fall back to FTS5 if the model
-cache is unavailable rather than downloading files during a chat.
+Normal retrieval uses local-only model loading and falls back to FTS5 if the embedding cache is
+unavailable.
 
 Source versions, SHA-256 digests, and expected parsed-document counts are committed with the
 source definitions. Synchronization verifies all three before replacing indexed documents.

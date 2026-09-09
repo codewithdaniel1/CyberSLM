@@ -19,6 +19,35 @@ class ValidatedCorpus:
     sha256: str
 
 
+def export_huggingface_splits(corpus: ValidatedCorpus, output_dir: Path) -> dict[str, Path]:
+    """Export reviewed chat records as framework-neutral Hugging Face/Unsloth JSONL splits."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, Path] = {}
+    for split in ("train", "validation"):
+        path = output_dir / f"{split}.jsonl"
+        records = [record for record in corpus.records if record["split"] == split]
+        path.write_text(
+            "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+            encoding="utf-8",
+        )
+        paths[split] = path
+    metadata = {
+        "schema_version": 1,
+        "format": "huggingface-chat-messages-jsonl",
+        "dataset_version": corpus.manifest["dataset_version"],
+        "base_model": corpus.manifest["base_model"],
+        "source_corpus_sha256": corpus.sha256,
+        "splits": {
+            split: sum(record["split"] == split for record in corpus.records)
+            for split in ("train", "validation")
+        },
+    }
+    metadata_path = output_dir / "dataset-info.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    paths["metadata"] = metadata_path
+    return paths
+
+
 def _required_text(value: Any, field: str, record_id: str) -> str:
     if not isinstance(value, str) or value.strip().casefold() in PLACEHOLDER_VALUES:
         raise ValueError(f"{record_id}: {field} must be a reviewed, non-placeholder string")

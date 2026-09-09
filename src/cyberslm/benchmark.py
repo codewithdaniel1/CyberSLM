@@ -24,7 +24,7 @@ from cyberslm.evaluation.runner import EvaluationRunner, load_dataset
 from cyberslm.model import ModelBackend, create_backend
 
 DEFAULT_BENCHMARK_DATASET = Path("evals/datasets/smoke.jsonl")
-BENCHMARK_BACKENDS = ("mlx", "transformers")
+BENCHMARK_BACKENDS = ("ollama", "mlx", "transformers")
 
 
 def _package_version(name: str) -> str | None:
@@ -142,7 +142,7 @@ def run_benchmark(
 
 def default_output_path(backend: str, quantization: str) -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    mode = quantization if backend == "transformers" else "mlx"
+    mode = quantization if backend == "transformers" else backend
     return Path("evals/results") / f"{timestamp}-{backend}-{mode}-benchmark.json"
 
 
@@ -174,7 +174,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=TRANSFORMERS_QUANTIZATION_MODES,
         default=None,
         help=(
-            "Transformers weight mode (default: configured value for Transformers; none for MLX)"
+            "Transformers weight mode (ignored by the Ollama and MLX backends)"
         ),
     )
     return parser
@@ -189,7 +189,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     quantization = args.quantization or (
         settings.transformers_quantization if args.backend == "transformers" else "none"
     )
-    if args.backend == "mlx" and quantization != "none":
+    if args.backend != "transformers" and quantization != "none":
         raise SystemExit("--quantization applies only to the transformers backend")
 
     model_id = args.model or (
@@ -204,7 +204,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         transformers_device=args.device,
         transformers_revision=args.revision,
         transformers_quantization=quantization,
-        adapter_path=settings.adapter_path if args.backend == "mlx" else None,
+        adapter_path=(
+            settings.adapter_path if args.backend in {"mlx", "transformers"} else None
+        ),
         max_tokens=args.max_tokens,
         temperature=args.temperature,
     )
@@ -215,8 +217,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "backend": args.backend,
         "model_id": model_id,
         "revision": args.revision if args.backend == "transformers" else None,
-        "device": args.device if args.backend == "transformers" else "mps",
-        "quantization": quantization if args.backend == "transformers" else "mlx",
+        "device": args.device if args.backend == "transformers" else None,
+        "quantization": (
+            quantization
+            if args.backend == "transformers"
+            else ("managed-by-ollama" if args.backend == "ollama" else "mlx")
+        ),
         "adapter_path": (
             str(run_settings.adapter_path) if run_settings.adapter_path is not None else None
         ),

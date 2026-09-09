@@ -4,7 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from cyberslm.training.corpus import validate_corpus
+from cyberslm.knowledge.sources import KnowledgeSource
+from cyberslm.knowledge.store import KnowledgeStore
+from cyberslm.training.corpus import export_huggingface_splits, validate_corpus
+from cyberslm.training.pretraining import export_pretraining_corpus
+from cyberslm.training.unsloth_run import (
+    build_parser as build_unsloth_parser,
+)
+from cyberslm.training.unsloth_run import run as run_unsloth
+from cyberslm.training.unsloth_run import validate_pretraining_export
 
 
 def write_corpus(tmp_path: Path, *, private: bool = False) -> tuple[Path, Path]:
@@ -78,3 +86,152 @@ def test_training_corpus_rejects_changes_after_review(tmp_path: Path) -> None:
     dataset.write_text(dataset.read_text() + "\n")
     with pytest.raises(ValueError, match="SHA-256"):
         validate_corpus(dataset, manifest)
+
+
+def test_reviewed_corpus_exports_framework_neutral_chat_splits(tmp_path: Path) -> None:
+    dataset, manifest = write_corpus(tmp_path)
+    corpus = validate_corpus(dataset, manifest)
+
+    paths = export_huggingface_splits(corpus, tmp_path / "export")
+
+    train = [json.loads(line) for line in paths["train"].read_text().splitlines()]
+    validation = [
+        json.loads(line) for line in paths["validation"].read_text().splitlines()
+    ]
+    metadata = json.loads(paths["metadata"].read_text())
+    assert [record["id"] for record in train] == ["train-1"]
+    assert [record["id"] for record in validation] == ["validation-1"]
+    assert train[0]["messages"][-1]["role"] == "assistant"
+    assert metadata["format"] == "huggingface-chat-messages-jsonl"
+    assert metadata["source_corpus_sha256"] == corpus.sha256
+    assert metadata["splits"] == {"train": 1, "validation": 1}
+
+
+def test_verified_knowledge_exports_deterministic_pretraining_splits(tmp_path: Path) -> None:
+    source = KnowledgeSource(
+        key="cwe",
+        name="Test CWE",
+        version="test-1",
+        url="https://example.test/cwe.zip",
+        filename="cwe.zip",
+        sha256="a" * 64,
+        document_count=20,
+        notice="Test notice",
+    )
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    store.replace_source(
+        source_key=source.key,
+        source_name=source.name,
+        source_version=source.version,
+        source_url=source.url,
+        source_sha256=source.sha256,
+        notice=source.notice,
+        documents=[
+            {
+                "id": f"cwe:{index}",
+                "external_id": f"CWE-{index}",
+                "title": f"Weakness {index}",
+                "url": f"https://example.test/cwe/{index}",
+                "content": f"Reviewed weakness description {index}.",
+            }
+            for index in range(20)
+        ],
+    )
+
+    first = export_pretraining_corpus(
+        store,
+        tmp_path / "first",
+        source_keys=("cwe",),
+        validation_percent=50,
+        expected_sources={"cwe": source},
+    )
+    second = export_pretraining_corpus(
+        store,
+        tmp_path / "second",
+        source_keys=("cwe",),
+        validation_percent=50,
+        expected_sources={"cwe": source},
+    )
+
+    assert first["manifest"]["total_records"] == 20
+    assert first["manifest"]["files"] == second["manifest"]["files"]
+    assert first["paths"]["train"].read_bytes() == second["paths"]["train"].read_bytes()
+    assert first["paths"]["validation"].read_bytes() == second["paths"][
+        "validation"
+    ].read_bytes()
+    record = json.loads(first["paths"]["train"].read_text().splitlines()[0])
+    assert record["source"]["archive_sha256"] == source.sha256
+    assert record["source"]["license"] == "CWE Terms of Use"
+    validated = validate_pretraining_export(first["manifest_path"])
+    assert validated["total_records"] == 20
+
+    first["paths"]["train"].write_text(
+        first["paths"]["train"].read_text() + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="byte count"):
+        validate_pretraining_export(first["manifest_path"])
+
+
+def test_pretraining_export_rejects_unverified_source_metadata(tmp_path: Path) -> None:
+    expected = KnowledgeSource(
+        key="cwe",
+        name="Test CWE",
+        version="expected",
+        url="https://example.test/cwe.zip",
+        filename="cwe.zip",
+        sha256="a" * 64,
+        document_count=1,
+        notice="Test notice",
+    )
+    store = KnowledgeStore(tmp_path / "knowledge.db")
+    store.replace_source(
+        source_key="cwe",
+        source_name="Test CWE",
+        source_version="unexpected",
+        source_url=expected.url,
+        source_sha256="b" * 64,
+        notice=expected.notice,
+        documents=[
+            {
+                "id": "cwe:1",
+                "external_id": "CWE-1",
+                "title": "Weakness",
+                "url": "https://example.test/cwe/1",
+                "content": "Description.",
+            }
+        ],
+    )
+
+    with pytest.raises(ValueError, match="pinned version/hash"):
+        export_pretraining_corpus(
+            store,
+            tmp_path / "output",
+            source_keys=("cwe",),
+            expected_sources={"cwe": expected},
+        )
+
+
+def test_unsloth_run_requires_explicit_review_confirmation() -> None:
+    args = build_unsloth_parser().parse_args(
+        ["--base-revision", "1234567890abcdef", "--validate-only"]
+    )
+
+    with pytest.raises(ValueError, match="--confirm-reviewed"):
+        run_unsloth(args)
+
+
+def test_unsloth_run_rejects_invalid_smoke_step_count() -> None:
+    args = build_unsloth_parser().parse_args(
+        [
+            "--base-revision",
+            "1234567890abcdef",
+            "--max-steps",
+            "0",
+            "--confirm-reviewed",
+            "--validate-only",
+        ]
+    )
+
+    with pytest.raises(ValueError, match="max_steps must be positive"):
+        run_unsloth(args)

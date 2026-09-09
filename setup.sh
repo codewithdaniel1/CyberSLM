@@ -9,26 +9,21 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-RUNTIME_EXTRA="transformers"
-if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
-  RUNTIME_EXTRA="mlx"
-fi
-
-echo "Setting up CyberSLM with Python 3.12 and the ${RUNTIME_EXTRA} runtime..."
-uv sync --python 3.12 --extra "$RUNTIME_EXTRA" --extra dev
+echo "Setting up the format-neutral CyberSLM model toolkit with Python 3.12..."
+uv sync --python 3.12 --extra dev
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
   echo "Created .env from .env.example"
 fi
 
-mkdir -p data/uploads
+mkdir -p data/training data/adapters data/knowledge
 
 echo
-echo "Setup complete. Start CyberSLM with:"
+echo "Setup complete. Useful next commands:"
 echo "  uv run cyberslm-knowledge sync"
 echo "  uv run cyberslm-knowledge verify"
-echo "  ./start.sh"
+echo "  uv run cyberslm-train --help"
+echo "  uv run cyberslm-eval --help"
 echo
-echo "The selected Gemma model downloads lazily on the first prompt."
-echo "For a quick smoke test without a model, set CYBERSLM_MODEL_BACKEND=mock in .env."
+echo "Install only the runtime needed for a task: --extra mlx or --extra transformers."

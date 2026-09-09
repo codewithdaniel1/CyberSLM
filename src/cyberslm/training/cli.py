@@ -6,7 +6,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cyberslm.config import settings
-from cyberslm.training.corpus import load_records, validate_corpus
+from cyberslm.knowledge import KnowledgeStore
+from cyberslm.training.corpus import export_huggingface_splits, load_records, validate_corpus
+from cyberslm.training.pretraining import APPSEC_PRETRAINING_SOURCES, export_pretraining_corpus
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +21,36 @@ def build_parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("validate", help="Validate a corpus against its manifest")
     validate.add_argument("--dataset", type=Path, required=True)
     validate.add_argument("--manifest", type=Path, required=True)
+
+    export = commands.add_parser(
+        "export",
+        help="Export a reviewed corpus for Hugging Face datasets and manual Unsloth training",
+    )
+    export.add_argument("--dataset", type=Path, required=True)
+    export.add_argument("--manifest", type=Path, required=True)
+    export.add_argument("--output", type=Path, required=True)
+
+    pretraining = commands.add_parser(
+        "export-pretraining",
+        help="Export verified local CWE/CAPEC documents for continued pretraining",
+    )
+    pretraining.add_argument(
+        "--knowledge-db", type=Path, default=settings.knowledge_database_path
+    )
+    pretraining.add_argument("--output", type=Path, required=True)
+    pretraining.add_argument(
+        "--source",
+        action="append",
+        choices=APPSEC_PRETRAINING_SOURCES,
+        dest="sources",
+        help="Source to export (repeatable; defaults to cwe and capec)",
+    )
+    pretraining.add_argument("--validation-percent", type=int, default=5)
+    pretraining.add_argument(
+        "--confirm-training-use",
+        action="store_true",
+        help="Confirm that source terms/notices were reviewed for this training use",
+    )
 
     train = commands.add_parser("run", help="Train a local LoRA adapter after validation")
     train.add_argument("--dataset", type=Path, required=True)
@@ -120,6 +152,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"Valid reviewed corpus: {len(corpus.records)} examples, "
                 f"SHA-256 {corpus.sha256}"
             )
+        elif args.command == "export":
+            corpus = validate_corpus(args.dataset, args.manifest)
+            paths = export_huggingface_splits(corpus, args.output)
+            print(f"Exported train split: {paths['train']}")
+            print(f"Exported validation split: {paths['validation']}")
+            print(f"Exported metadata: {paths['metadata']}")
+        elif args.command == "export-pretraining":
+            if not args.confirm_training_use:
+                raise ValueError(
+                    "Pretraining export requires --confirm-training-use after reviewing source "
+                    "terms and notices"
+                )
+            result = export_pretraining_corpus(
+                KnowledgeStore(args.knowledge_db),
+                args.output,
+                source_keys=tuple(args.sources or APPSEC_PRETRAINING_SOURCES),
+                validation_percent=args.validation_percent,
+            )
+            manifest = result["manifest"]
+            print(f"Exported pretraining records: {manifest['total_records']}")
+            print(f"Train: {result['paths']['train']}")
+            print(f"Validation: {result['paths']['validation']}")
+            print(f"Manifest: {result['manifest_path']}")
         else:
             run_training(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:

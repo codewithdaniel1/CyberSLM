@@ -13,6 +13,7 @@ load_dotenv(ENV_FILE)
 
 DEFAULT_MLX_MODEL_ID = "mlx-community/gemma-3-4b-it-4bit"
 DEFAULT_TRANSFORMERS_MODEL_ID = "google/gemma-3-4b-it"
+DEFAULT_OLLAMA_MODEL_ID = "gemma3:4b"
 TRANSFORMERS_QUANTIZATION_MODES = ("none", "8bit", "4bit")
 
 
@@ -25,6 +26,8 @@ def default_model_backend() -> str:
 def default_model_id(backend: str) -> str:
     if backend == "transformers":
         return DEFAULT_TRANSFORMERS_MODEL_ID
+    if backend == "ollama":
+        return DEFAULT_OLLAMA_MODEL_ID
     return DEFAULT_MLX_MODEL_ID
 
 
@@ -69,8 +72,8 @@ def _data_path(*parts: str) -> Path:
 class Settings:
     project_root: Path = PROJECT_ROOT
     data_dir: Path = field(default_factory=_data_dir)
-    upload_dir: Path = field(default_factory=lambda: _data_path("uploads"))
-    database_path: Path = field(default_factory=lambda: _data_path("cyberslm.db"))
+    training_dir: Path = field(default_factory=lambda: _data_path("training"))
+    adapter_dir: Path = field(default_factory=lambda: _data_path("adapters"))
     knowledge_dir: Path = field(default_factory=lambda: _data_path("knowledge"))
     knowledge_database_path: Path = field(
         default_factory=lambda: _data_path("knowledge", "knowledge.db")
@@ -90,13 +93,13 @@ class Settings:
         if (value := os.getenv("CYBERSLM_ADAPTER_PATH", "").strip())
         else None
     )
+    ollama_base_url: str = os.getenv(
+        "CYBERSLM_OLLAMA_BASE_URL", "http://127.0.0.1:11434"
+    ).rstrip("/")
+    ollama_timeout: float = _float_env("CYBERSLM_OLLAMA_TIMEOUT", 600.0)
+    ollama_context_size: int = _int_env("CYBERSLM_OLLAMA_CONTEXT_SIZE", 4_096)
     max_tokens: int = _int_env("CYBERSLM_MAX_TOKENS", 1024)
     temperature: float = _float_env("CYBERSLM_TEMPERATURE", 0.2)
-    api_url: str = os.getenv("CYBERSLM_API_URL", "http://127.0.0.1:8000")
-    api_host: str = os.getenv("CYBERSLM_API_HOST", "127.0.0.1")
-    api_port: int = _int_env("CYBERSLM_API_PORT", 8000)
-    ui_port: int = _int_env("CYBERSLM_UI_PORT", 8501)
-    max_upload_mb: int = _int_env("CYBERSLM_MAX_UPLOAD_MB", 10)
     rag_enabled: bool = _bool_env("CYBERSLM_RAG_ENABLED", True)
     rag_semantic_enabled: bool = _bool_env("CYBERSLM_RAG_SEMANTIC_ENABLED", True)
     rag_embedding_model: str = os.getenv(
@@ -104,10 +107,6 @@ class Settings:
     )
     rag_results: int = _int_env("CYBERSLM_RAG_RESULTS", 4)
     rag_max_chars: int = _int_env("CYBERSLM_RAG_MAX_CHARS", 16_000)
-    code_validation_enabled: bool = _bool_env("CYBERSLM_CODE_VALIDATION_ENABLED", True)
-    c_compiler: str | None = os.getenv("CYBERSLM_C_COMPILER", "").strip() or None
-    code_validation_timeout: float = _float_env("CYBERSLM_CODE_VALIDATION_TIMEOUT", 4.0)
-
     def __post_init__(self) -> None:
         backend = self.model_backend.strip().lower()
         if backend in {"", "auto"}:
@@ -125,7 +124,8 @@ class Settings:
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        self.training_dir.mkdir(parents=True, exist_ok=True)
+        self.adapter_dir.mkdir(parents=True, exist_ok=True)
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
 
 
