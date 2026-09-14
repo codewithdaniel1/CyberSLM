@@ -8,6 +8,23 @@ and converted to GGUF for Ollama or llama.cpp. Hugging Face Hub publishing is de
 The project now specializes in applied cryptography. The former AppSec CWE/CAPEC export is
 historical only and must not be used to train CyberSLM-Crypto.
 
+## Crypto-CTF draft curriculum
+
+Generate 60 original, deterministic draft examples for human review:
+
+```bash
+uv run cyberslm-train generate-crypto-ctf-drafts
+```
+
+The drafts cover Base64, hex, layered Base64/URL decoding, Base64/gzip, ambiguous-input
+abstention, hashes, AES and PGP missing-key abstention, toy RSA, repeating-key XOR, JWT decoding,
+and AES-GCM nonce reuse. They are written under `data/training/drafts/`, which is ignored by Git.
+
+Every generated record is deliberately marked `approved_for_training: false` and
+`review_status: "draft"`. Review technical accuracy, improve variety, remove any unsuitable item,
+and promote selected records into a separate reviewed corpus with a new SHA-256 manifest. Do not
+train directly on the drafts or on the CyberWorkbench scorecard's exact cases.
+
 ## Reviewed-data gate
 
 There is no shipped production corpus. Each JSONL record must contain:

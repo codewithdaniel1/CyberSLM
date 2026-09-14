@@ -58,6 +58,10 @@ The model may derive a flag or plaintext only from challenge-supplied or synthet
 claim never authorizes recovering third-party secrets, decrypting intercepted traffic, or building
 a production backdoor.
 
+The repository provides `cyberslm-train generate-crypto-ctf-drafts` to create 60 deterministic,
+original draft examples. It exists to seed review, not to bypass it: every record is explicitly
+unapproved and must be promoted into a separately hashed, reviewed corpus before training.
+
 ## Initial knowledge and data plan
 
 The first corpus is intentionally smaller and more curated than the former AppSec corpus. Before

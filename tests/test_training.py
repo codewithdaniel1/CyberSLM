@@ -7,6 +7,7 @@ import pytest
 from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 from cyberslm.training.corpus import export_huggingface_splits, validate_corpus
+from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts
 from cyberslm.training.pretraining import export_pretraining_corpus
 from cyberslm.training.unsloth_run import (
     build_parser as build_unsloth_parser,
@@ -235,3 +236,30 @@ def test_unsloth_run_rejects_invalid_smoke_step_count() -> None:
 
     with pytest.raises(ValueError, match="max_steps must be positive"):
         run_unsloth(args)
+
+
+def test_crypto_ctf_draft_generator_is_deterministic_and_unapproved(tmp_path: Path) -> None:
+    first_path = tmp_path / "first.jsonl"
+    second_path = tmp_path / "second.jsonl"
+
+    first = generate_crypto_ctf_drafts(first_path, count=24, seed=7)
+    generate_crypto_ctf_drafts(second_path, count=24, seed=7)
+
+    assert first_path.read_bytes() == second_path.read_bytes()
+    assert len(first) == 24
+    assert {record["skill"] for record in first} == {
+        "base64",
+        "hex",
+        "layered-base64-url",
+        "base64-gzip",
+        "safe-abstention-ambiguous",
+        "hash-safe-abstention",
+        "aes-safe-abstention",
+        "pgp-safe-abstention",
+        "toy-rsa",
+        "repeating-key-xor",
+        "jwt-recognition",
+        "aead-nonce-reuse",
+    }
+    assert all(record["approved_for_training"] is False for record in first)
+    assert all(record["review_status"] == "draft" for record in first)

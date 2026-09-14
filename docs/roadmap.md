@@ -16,8 +16,9 @@ promotion baseline for this model.
    - [ ] Approve a small, versioned set of source documents and terms for training use.
    - [ ] Add a provenance-preserving crypto corpus exporter; never reuse the CWE/CAPEC corpus.
    - [ ] Write and human-review crypto instruction examples for implementation and protocol use.
-   - [ ] Write and human-review original crypto CTF challenge/solution pairs across the published
-     taxonomy; never scrape unlicensed writeups.
+   - [x] Generate deterministic original crypto-CTF draft examples across the starter taxonomy.
+   - [ ] Human-review and promote original crypto CTF challenge/solution pairs; never scrape
+     unlicensed writeups.
    - [ ] Build a held-out crypto evaluation suite before tuning.
 3. **Train and validate.**
    - [x] Maintain a guarded, reproducible Unsloth runner that records exact corpus and environment

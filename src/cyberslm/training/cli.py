@@ -8,6 +8,7 @@ from pathlib import Path
 from cyberslm.config import settings
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.training.corpus import export_huggingface_splits, load_records, validate_corpus
+from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts
 from cyberslm.training.pretraining import APPSEC_PRETRAINING_SOURCES, export_pretraining_corpus
 
 
@@ -37,6 +38,18 @@ def build_parser() -> argparse.ArgumentParser:
     pretraining.add_argument(
         "--knowledge-db", type=Path, default=settings.knowledge_database_path
     )
+
+    crypto_ctf_drafts = commands.add_parser(
+        "generate-crypto-ctf-drafts",
+        help="Generate original, unapproved crypto-CTF training drafts for human review",
+    )
+    crypto_ctf_drafts.add_argument(
+        "--output",
+        type=Path,
+        default=Path("data/training/drafts/crypto-ctf-curriculum-v1.jsonl"),
+    )
+    crypto_ctf_drafts.add_argument("--count", type=int, default=60)
+    crypto_ctf_drafts.add_argument("--seed", type=int, default=3407)
     pretraining.add_argument("--output", type=Path, required=True)
     pretraining.add_argument(
         "--source",
@@ -175,6 +188,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Train: {result['paths']['train']}")
             print(f"Validation: {result['paths']['validation']}")
             print(f"Manifest: {result['manifest_path']}")
+        elif args.command == "generate-crypto-ctf-drafts":
+            records = generate_crypto_ctf_drafts(args.output, count=args.count, seed=args.seed)
+            print(f"Generated {len(records)} unapproved crypto-CTF drafts: {args.output}")
+            print("Review and promote selected records before any training run.")
         else:
             run_training(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
