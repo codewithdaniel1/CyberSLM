@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import platform
 from collections.abc import Sequence
@@ -93,6 +94,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if output_root.exists() and any(output_root.iterdir()):
         raise ValueError(f"Output directory is not empty: {output_root}; choose a new output path")
     try:
+        # Unsloth must patch Transformers/TRL before they are imported.
+        importlib.import_module("unsloth")
         import torch
         from datasets import Dataset
         from trl import SFTConfig, SFTTrainer
@@ -148,13 +151,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     output_root.mkdir(parents=True, exist_ok=True)
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=train_data,
         eval_dataset=validation_data,
         args=SFTConfig(
             output_dir=str(checkpoints_dir),
             dataset_text_field="text",
-            max_seq_length=args.max_seq_length,
+            max_length=args.max_seq_length,
             packing=False,
             num_train_epochs=args.epochs,
             max_steps=args.max_steps if args.max_steps is not None else -1,
