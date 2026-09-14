@@ -10,12 +10,14 @@ promotion baseline for this model.
 
 1. **Lock the specialty.**
    - [x] Set the model behavior and Ollama development prompt to applied cryptography only.
-   - [x] Exclude audit, SOC, offensive, forensics, and CTF work from the product scope.
+   - [x] Exclude audit, SOC, offensive, forensics, and non-cryptography CTF work from the scope.
    - [x] Establish `gemma3-4b-cyberslm-crypto` as the first naming target.
 2. **Build trustworthy crypto data.**
    - [ ] Approve a small, versioned set of source documents and terms for training use.
    - [ ] Add a provenance-preserving crypto corpus exporter; never reuse the CWE/CAPEC corpus.
    - [ ] Write and human-review crypto instruction examples for implementation and protocol use.
+   - [ ] Write and human-review original crypto CTF challenge/solution pairs across the published
+     taxonomy; never scrape unlicensed writeups.
    - [ ] Build a held-out crypto evaluation suite before tuning.
 3. **Train and validate.**
    - [x] Maintain a guarded, reproducible Unsloth runner that records exact corpus and environment

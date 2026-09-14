@@ -10,10 +10,12 @@ Its job is to help engineers reason about and correctly use established cryptogr
 - secure library/API use and interoperability;
 - cryptographic protocol composition and misuse resistance;
 - key generation, storage, rotation, backup, and retirement; and
-- post-quantum standards and migration planning.
+- post-quantum standards and migration planning; and
+- cryptography CTFs and educational challenges using supplied or synthetic data.
 
 It is not a general vulnerability auditor, SOC analyst, penetration-testing assistant, forensics
-tool, CTF solver, or generic secure-code reviewer. Those requests belong in CyberWorkbench.
+tool, non-cryptography CTF solver, or generic secure-code reviewer. Those requests belong in
+CyberWorkbench.
 
 The first model will be named after its base model, for example:
 

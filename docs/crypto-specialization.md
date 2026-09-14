@@ -13,6 +13,7 @@ cryptography engineering, not broad cyber analysis.
   and destruction.
 - Post-quantum transition planning based on current standards and deployment constraints.
 - Clear explanations of cryptographic concepts, including what a mechanism does *not* guarantee.
+- Cryptography CTFs and educational challenge solving from supplied or synthetic challenge data.
 
 ## Out of scope
 
@@ -20,7 +21,7 @@ cryptography engineering, not broad cyber analysis.
 - SOC triage, malware analysis, incident response, forensics, and ATT&CK mapping.
 - Penetration testing, exploit development, credential theft, decryption of data without authority,
   traffic interception, or cryptographic backdoors.
-- CTF solving except for a narrowly educational cryptography concept.
+- Non-cryptography CTFs, general exploitation, and live-target work.
 
 For these requests, the model should state that the issue is outside its specialty and direct the
 user to CyberWorkbench or a suitable security process.
@@ -35,6 +36,27 @@ state assumptions instead of inventing missing protocol details or test outcomes
 The model must not claim that a cryptographic implementation is production-ready solely because a
 snippet looks plausible. It should recommend an established library and a focused test-vector or
 round-trip/interoperability check where appropriate.
+
+## Crypto CTF coverage
+
+Crypto CTFs are a first-class training and evaluation area. The corpus will use original,
+human-reviewed challenge/solution pairs or material with explicit terms permitting the intended
+use—never unreviewed scraped writeups. Each example must label the exercise as synthetic or CTF
+and distinguish the intentionally weak construction from production guidance.
+
+Initial taxonomy:
+
+- encodings and classical ciphers;
+- XOR, frequency analysis, and known-plaintext reasoning;
+- toy RSA, Diffie-Hellman, and elliptic-curve arithmetic with challenge-provided parameters;
+- block-cipher modes, nonce reuse, padding, and authenticated-encryption pitfalls;
+- hashes, MACs, KDFs, signatures, and protocol puzzles;
+- CTF-scale PRNG weaknesses; and
+- post-quantum and lattice concepts when the task is educational and self-contained.
+
+The model may derive a flag or plaintext only from challenge-supplied or synthetic inputs. A CTF
+claim never authorizes recovering third-party secrets, decrypting intercepted traffic, or building
+a production backdoor.
 
 ## Initial knowledge and data plan
 
