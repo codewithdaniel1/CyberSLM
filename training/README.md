@@ -1,9 +1,12 @@
-# CyberSLM training
+# CyberSLM-Crypto training
 
 CyberSLM uses standard local PEFT Safetensors as its canonical adapter format. Training engines
 are replaceable: Unsloth is the primary NVIDIA/Colab path, while the existing MLX experiment
 remains available for Apple Silicon. Accepted models can then be merged to standard Safetensors
 and converted to GGUF for Ollama or llama.cpp. Hugging Face Hub publishing is deferred.
+
+The project now specializes in applied cryptography. The former AppSec CWE/CAPEC export is
+historical only and must not be used to train CyberSLM-Crypto.
 
 ## Reviewed-data gate
 
@@ -51,10 +54,10 @@ dataset = load_dataset(
 )
 ```
 
-## Continued-pretraining corpus
+## Historical AppSec continued-pretraining corpus
 
-CyberSLM-AppSec can explicitly export the already-synced CWE and CAPEC normalized documents as a
-raw-text corpus. This is separate from SFT chat data and never happens during ordinary RAG use:
+The following AppSec exporter is retained so historical results remain reproducible. It is not a
+valid input for CyberSLM-Crypto and is separate from ordinary RAG use:
 
 ```bash
 uv run cyberslm-knowledge verify
@@ -88,18 +91,19 @@ without importing Unsloth or downloading the base model:
 
 ```bash
 uv run cyberslm-unsloth \
-  --manifest data/training/appsec-pretraining-v1/pretraining-manifest.json \
+  --manifest data/training/crypto-pretraining-v1/pretraining-manifest.json \
   --base-revision <FULL_COMMIT_SHA> \
   --confirm-reviewed \
   --validate-only
 ```
 
-Then remove `--validate-only` to run one conservative continued-pretraining epoch:
+Do not run the preflight or training command until a source-reviewed crypto corpus has been
+created. Then remove `--validate-only` to run one conservative continued-pretraining epoch:
 
 ```bash
 uv run cyberslm-unsloth \
-  --manifest data/training/appsec-pretraining-v1/pretraining-manifest.json \
-  --output data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1 \
+  --manifest data/training/crypto-pretraining-v1/pretraining-manifest.json \
+  --output data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1 \
   --base-model unsloth/gemma-3-4b-it-unsloth-bnb-4bit \
   --base-revision <FULL_COMMIT_SHA> \
   --epochs 1 \
@@ -110,7 +114,7 @@ uv run cyberslm-unsloth \
 The command follows Unsloth's Gemma 3 `FastModel` plus TRL `SFTTrainer` raw-text path. It saves:
 
 ```text
-data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1/
+data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/
 ├── adapter/                  PEFT adapter and tokenizer files
 ├── checkpoints/              resumable trainer checkpoints
 ├── merged/                   merged 16-bit Safetensors checkpoint
@@ -128,12 +132,12 @@ The equivalent manual Unsloth save calls are:
 
 ```python
 # Canonical small local PEFT adapter
-model.save_pretrained("gemma3-4b-cyberslm-appsec-adapter")
-tokenizer.save_pretrained("gemma3-4b-cyberslm-appsec-adapter")
+model.save_pretrained("gemma3-4b-cyberslm-crypto-adapter")
+tokenizer.save_pretrained("gemma3-4b-cyberslm-crypto-adapter")
 
 # Portable merged checkpoint for standard Transformers and later conversion
 model.save_pretrained_merged(
-    "gemma3-4b-cyberslm-appsec-merged",
+    "gemma3-4b-cyberslm-crypto-merged",
     tokenizer,
     save_method="merged_16bit",
 )
@@ -166,8 +170,8 @@ An accepted training run must preserve:
   hyperparameters; and
 - evaluation reports from the untouched base and candidate on identical held-out cases.
 
-Training loss is not an acceptance metric by itself. The candidate must improve useful cyber
-behavior without weakening factual accuracy, safety, false-refusal behavior, or grounded RAG.
+Training loss is not an acceptance metric by itself. The candidate must improve applied-crypto
+guidance without weakening factual accuracy, safety, evidence restraint, or grounded RAG.
 
 Primary references:
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 def main() -> None:
     print(
-        "CyberSLM-AppSec model toolkit\n\n"
+        "CyberSLM-Crypto model toolkit\n\n"
         "Commands:\n"
         "  cyberslm-train      Inspect, validate, and fine-tune reviewed datasets\n"
         "  cyberslm-eval       Run model, safety, and RAG evaluations\n"

@@ -30,7 +30,7 @@ from cyberslm.model import (
     create_backend,
 )
 
-DEFAULT_DATASET = Path("evals/datasets/smoke.jsonl")
+DEFAULT_DATASET = Path("evals/datasets/crypto-v1.jsonl")
 DEFAULT_RETRIEVAL_DATASET = Path("evals/datasets/retrieval.jsonl")
 DEFAULT_RAG_GATE_DATASET = Path("evals/datasets/selective-rag.jsonl")
 

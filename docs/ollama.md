@@ -1,10 +1,10 @@
-# CyberSLM-AppSec Ollama workflow
+# CyberSLM-Crypto Ollama workflow
 
-Ollama is one CyberSLM-AppSec deployment target, not the canonical or exclusive format. The canonical
+Ollama is one CyberSLM-Crypto deployment target, not the canonical or exclusive format. The canonical
 fine-tuned artifact will be a local PEFT Safetensors adapter plus a merged Safetensors checkpoint;
 GGUF and Ollama models are derived from the accepted merged checkpoint. Hugging Face Hub work is
 deferred. The target name includes the base family, size, and specialty:
-`gemma3-4b-cyberslm-appsec`.
+`gemma3-4b-cyberslm-crypto`.
 
 The checked-in Modelfile currently creates a development model from the untouched Gemma 3 4B
 base. It is a baseline, not yet a fine-tuned model.
@@ -15,14 +15,14 @@ Install and start Ollama, then run from the repository root:
 
 ```bash
 ollama pull gemma3:4b
-ollama create gemma3-4b-cyberslm-appsec:dev -f ollama/Modelfile.gemma3-4b
-ollama run gemma3-4b-cyberslm-appsec:dev
+ollama create gemma3-4b-cyberslm-crypto:dev -f ollama/Modelfile.gemma3-4b
+ollama run gemma3-4b-cyberslm-crypto:dev
 ```
 
 No GitHub release or Ollama upload is required for local use. Ollama stores the pulled base and
 created model in its own managed model store rather than this Git repository.
 
-## Evaluate through CyberSLM-AppSec
+## Evaluate through CyberSLM-Crypto
 
 The `ollama` backend calls the local API at `http://127.0.0.1:11434` by default. It supports the
 same text, image, generation-metadata, evaluation, and optional CyberSLM RAG contracts as the
@@ -31,21 +31,21 @@ existing runtimes.
 ```bash
 uv run cyberslm-eval run \
   --backend ollama \
-  --model gemma3-4b-cyberslm-appsec:dev \
-  --dataset evals/datasets/smoke.jsonl \
+  --model gemma3-4b-cyberslm-crypto:dev \
+  --dataset evals/datasets/crypto-v1.jsonl \
   --rag-policy off \
   --temperature 0
 
 uv run cyberslm-eval run \
   --backend ollama \
-  --model gemma3-4b-cyberslm-appsec:dev \
-  --dataset evals/datasets/smoke.jsonl \
-  --rag-policy auto \
+  --model gemma3-4b-cyberslm-crypto:dev \
+  --dataset evals/datasets/crypto-v1.jsonl \
+  --rag-policy off \
   --temperature 0
 
 uv run cyberslm-benchmark \
   --backend ollama \
-  --model gemma3-4b-cyberslm-appsec:dev \
+  --model gemma3-4b-cyberslm-crypto:dev \
   --label ollama-base
 ```
 
@@ -62,7 +62,7 @@ continues to use the Modelfile system prompt.
 
 ## Fine-tuned artifact
 
-The intended first training release is `gemma3-4b-cyberslm-appsec:0.1`. Its high-level flow is:
+The intended first training release is `gemma3-4b-cyberslm-crypto:0.1`. Its high-level flow is:
 
 1. validate a separately licensed, provenance-tracked, human-approved SFT corpus;
 2. run a controlled Unsloth LoRA/QLoRA experiment;
@@ -70,8 +70,8 @@ The intended first training release is `gemma3-4b-cyberslm-appsec:0.1`. Its high
 4. export a compatible GGUF artifact and create the Ollama model from it; and
 5. adopt it only after it beats the untouched Ollama baseline without weakening safety.
 
-Raw ATT&CK, CWE, CAPEC, and uploaded documents remain RAG material. They are not automatically
-converted into fine-tuning examples or baked into the weights.
+Only approved crypto standards material and reviewed instruction data may become RAG or training
+inputs. Historical ATT&CK, CWE, and CAPEC content is not part of this model's scope.
 
 ## RAG and user interface
 
@@ -80,8 +80,8 @@ artifact. During the transition, the existing retrieval and evaluation path can 
 prompts to the Ollama backend. A later milestone will connect the model to Open WebUI or Onyx and
 compare that knowledge workflow with CyberSLM's current provenance-aware retriever.
 
-Running `ollama run gemma3-4b-cyberslm-appsec:<version>` by itself uses only the model weights and system
-prompt; it does not query CyberSLM's ATT&CK/CWE/CAPEC index. To get RAG, attach the Ollama model to
+Running `ollama run gemma3-4b-cyberslm-crypto:<version>` by itself uses only the model weights and system
+prompt; it does not query an optional crypto standards bundle. To get RAG, attach the Ollama model to
 a RAG client such as Open WebUI and load a knowledge collection, or put CyberSLM's retriever in
 front of the Ollama API. The latter preserves CyberSLM's pinned sources and citation controls.
 
@@ -96,13 +96,13 @@ be packaged as deterministic parts when necessary. The release will include part
 expected reconstructed GGUF hash, cross-platform reconstruction commands, and this Modelfile.
 Users will not need the CyberSLM Python package merely to run the reconstructed GGUF in Ollama.
 
-## First baseline result
+## Historical AppSec baseline result
 
 On 2026-09-09, the local predecessor `gemma3-4b-cyberslm:dev` GGUF Q4_K_M model completed all six smoke cases
 at the normal 1,024-token limit without truncation. It passed 5/6 automatic checks without RAG;
 the remaining answer was substantively correct but missed an exact wording alternative. Auto-RAG
 passed 4/6 and revealed an unsafe SSRF validation suggestion plus weak citation attribution.
-Those are release blockers to address before the first fine-tuning experiment.
+Those results are retained as historical evidence and are not a CyberSLM-Crypto release gate.
 
 ## Primary references
 

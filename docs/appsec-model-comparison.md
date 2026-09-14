@@ -1,6 +1,7 @@
-# CyberSLM-AppSec model comparison
+# Historical CyberSLM-AppSec model comparison
 
-Status: preliminary baseline, 2026-09-09
+Status: historical preliminary baseline, 2026-09-09. This is not a CyberSLM-Crypto training or
+promotion gate.
 
 CyberSLM-AppSec compares every trained candidate with both its untouched base and a strong public
 cybersecurity model. The first comparison set is:

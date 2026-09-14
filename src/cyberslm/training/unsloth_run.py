@@ -81,17 +81,17 @@ def package_versions() -> dict[str, str | None]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run CyberSLM-AppSec continued pretraining with Unsloth"
+        description="Run CyberSLM-Crypto continued pretraining with Unsloth"
     )
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("data/training/appsec-pretraining-v1/pretraining-manifest.json"),
+        default=Path("data/training/crypto-pretraining-v1/pretraining-manifest.json"),
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1"),
+        default=Path("data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1"),
     )
     parser.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
     parser.add_argument(
@@ -254,7 +254,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
     metadata = {
         "schema_version": 1,
-        "model_name": "CyberSLM-AppSec",
+        "model_name": "CyberSLM-Crypto",
         "stage": "continued-pretraining",
         "created_at": datetime.now(UTC).isoformat(),
         **preflight,

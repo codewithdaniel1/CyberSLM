@@ -1,13 +1,13 @@
-# CyberSLM-AppSec Unsloth GPU run
+# CyberSLM-Crypto Unsloth GPU run
 
-This runbook performs the first continued-pretraining smoke test and full candidate run without
-placing another model on the local Mac. Google Colab storage is temporary; download the completed
-adapter and metadata before ending the session.
+This runbook is ready for the first crypto candidate, but is intentionally paused until the
+crypto corpus is source-reviewed and exported. Do not substitute the historical AppSec CWE/CAPEC
+corpus. Google Colab storage is temporary; download completed artifacts before ending a session.
 
 ## Before opening Colab
 
 1. Push the current CyberSLM source revision to GitHub.
-2. Review the Gemma license and the CWE/CAPEC source terms referenced in the corpus manifest.
+2. Review the Gemma license and the terms for every approved crypto source in the corpus manifest.
 3. Select an NVIDIA GPU runtime in Colab. A T4 may be sufficient for the 4-bit LoRA smoke run;
    an L4 or larger GPU is preferable for the complete run.
 4. Do not paste Hugging Face tokens into the notebook or repository. Use Colab Secrets if access
@@ -29,22 +29,14 @@ The Unsloth installation command may change with CUDA and PyTorch releases. If i
 3 notebook specifies a different installation cell, use that cell and then rerun `pip install -e
 .` for CyberSLM.
 
-## 2. Rebuild the pinned corpus
+## 2. Export the approved crypto corpus
 
-The raw corpus is deliberately absent from Git history. Rebuild it from the source definitions
-and pinned archive hashes:
+The raw corpus is deliberately absent from Git history. This step is unavailable until the crypto
+source exporter has been built and its sources approved. At that point, the documented exporter
+will write `data/training/crypto-pretraining-v1/`; do not invent or substitute a corpus path.
 
-```bash
-!cyberslm-knowledge sync --source cwe --source capec --no-embeddings
-!cyberslm-knowledge verify --source cwe --source capec
-!cyberslm-train export-pretraining \
-  --output data/training/appsec-pretraining-v1 \
-  --source cwe --source capec \
-  --confirm-training-use
-```
-
-The resulting manifest must report 1,503 records and match the expected source versions and
-archive hashes. The training runner independently verifies every exported file.
+The resulting manifest must match the approved source versions, record counts, and archive hashes.
+The training runner independently verifies every exported file.
 
 ## 3. Pin the base checkpoint
 
@@ -76,7 +68,7 @@ This should finish before any model is loaded.
 ```bash
 !cyberslm-unsloth \
   --base-revision "$CYBERSLM_BASE_REVISION" \
-  --output data/adapters/gemma3-4b-cyberslm-appsec-smoke \
+  --output data/adapters/gemma3-4b-cyberslm-crypto-smoke \
   --max-steps 5 \
   --confirm-reviewed \
   --skip-merge
@@ -92,7 +84,7 @@ Use a new output directory so the smoke artifact cannot be mistaken for the cand
 ```bash
 !cyberslm-unsloth \
   --base-revision "$CYBERSLM_BASE_REVISION" \
-  --output data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1 \
+  --output data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1 \
   --epochs 1 \
   --learning-rate 5e-5 \
   --confirm-reviewed
@@ -106,14 +98,14 @@ This creates the PEFT adapter, trainer checkpoints, merged 16-bit Safetensors, a
 Download at minimum:
 
 ```text
-data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1/adapter/
-data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1/merged/
-data/adapters/gemma3-4b-cyberslm-appsec-cpt-v1/cyberslm-training.json
+data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/adapter/
+data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/merged/
+data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/cyberslm-training.json
 ```
 
 The next local stage validates and hashes those files, reloads the adapter with plain
-Transformers, evaluates it against untouched Gemma 3 and Foundation-Sec, and only then converts an
-accepted candidate to GGUF for Ollama.
+Transformers, evaluates it against untouched Gemma 3 on the crypto suite, and only then converts
+an accepted candidate to GGUF for Ollama.
 
 References:
 
