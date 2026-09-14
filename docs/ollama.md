@@ -20,6 +20,23 @@ This updates the local `gemma3-4b-cyberslm-crypto:dev` alias and reuses existing
 layers. Training docs, curriculum drafts, and evaluation changes do not alter weights, so they do
 not change the scorecard until an actual fine-tune is promoted.
 
+## Import a derived GGUF candidate
+
+After a merged Safetensors candidate has passed artifact validation, convert it with a compatible
+llama.cpp converter, quantize it, hash the final GGUF, and import it without editing a local
+Modelfile by hand:
+
+```bash
+uv run cyberslm-ollama import-gguf \
+  --gguf data/adapters/gemma3-4b-cyberslm-crypto-ctf-sft-v0/gguf/gemma3-4b-cyberslm-crypto-ctf-sft-v0-Q4_K_M.gguf \
+  --model gemma3-4b-cyberslm-crypto:0.1.0-rc1
+```
+
+`import-gguf` uses the tracked crypto system prompt and parameters from
+`ollama/Modelfile.gemma3-4b`, replacing only its `FROM` line with the immutable local GGUF path.
+The `0.1.0-rc1` tag is experimental; it is not a release designation until the held-out
+comparison gate passes.
+
 ## Build and run the baseline
 
 Install and start Ollama, then run from the repository root:
@@ -80,6 +97,9 @@ The intended first training release is `gemma3-4b-cyberslm-crypto:0.1`. Its high
 3. merge the accepted adapter into the exact training base;
 4. export a compatible GGUF artifact and create the Ollama model from it; and
 5. adopt it only after it beats the untouched Ollama baseline without weakening safety.
+
+The first experimental candidate (`gemma3-4b-cyberslm-crypto:0.1.0-rc1`) has an imported Q4_K_M
+GGUF locally. It remains an evaluation candidate, not a release.
 
 Only approved crypto standards material and reviewed instruction data may become RAG or training
 inputs. Historical ATT&CK, CWE, and CAPEC content is not part of this model's scope.

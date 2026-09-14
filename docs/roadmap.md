@@ -23,13 +23,14 @@ promotion baseline for this model.
 3. **Train and validate.**
    - [x] Maintain a guarded, reproducible Unsloth runner that records exact corpus and environment
      metadata.
-   - [ ] Run a five-step smoke train on a reviewed crypto corpus using NVIDIA/Colab.
-   - [ ] Train one controlled Gemma 3 4B candidate.
-   - [ ] Validate the adapter, metadata, tokenizer, and merged Safetensors with SHA-256 manifests.
+   - [x] Run a five-step smoke train on an experimental crypto corpus using NVIDIA/Colab.
+   - [x] Train one controlled Gemma 3 4B experimental candidate.
+   - [x] Validate the adapter, metadata, tokenizer, and merged Safetensors with SHA-256 manifests.
    - [ ] Compare candidate and untouched base using human-reviewed crypto evaluations.
 4. **Derive portable releases.**
-   - [ ] Convert an accepted merged checkpoint to GGUF and validate it in Ollama.
-   - [ ] Create `gemma3-4b-cyberslm-crypto:0.1` from that accepted GGUF.
+   - [x] Convert the experimental candidate to GGUF and import
+     `gemma3-4b-cyberslm-crypto:0.1.0-rc1` locally for evaluation.
+   - [ ] Validate the candidate in Ollama and promote a versioned release tag only if it passes.
    - [ ] Package adapter, merged Safetensors, GGUF, hashes, and reconstruction instructions in a
      GitHub Release.
 5. **Offer optional standards RAG.**
