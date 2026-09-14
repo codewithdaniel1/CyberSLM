@@ -74,17 +74,21 @@ uv sync --extra transformers --extra dev  # Transformers / PEFT validation
 uv sync --extra mlx --extra train --extra dev  # Apple MLX experiment
 ```
 
-Use an NVIDIA CUDA machine or Colab for Unsloth. The runner defaults to the future verified crypto
-corpus and will fail safely until that corpus exists:
+Use an NVIDIA CUDA machine or Colab for Unsloth. The first experimental crypto-CTF candidate uses
+chat-style supervised fine-tuning and produces real LoRA adapter weights:
 
 ```bash
-uv run cyberslm-unsloth \
+uv run cyberslm-unsloth-sft \
+  --dataset data/training/crypto-ctf-sft-v0-experimental/corpus.jsonl \
+  --manifest data/training/crypto-ctf-sft-v0-experimental/manifest.json \
   --base-revision <UNSLOTH_MODEL_COMMIT_SHA> \
-  --confirm-reviewed \
+  --confirm-experimental-training \
   --validate-only
 ```
 
-Do not substitute the historical `appsec-pretraining-v1` corpus.
+Follow the complete [Unsloth Colab runbook](docs/unsloth-colab.md). The curriculum is clearly
+marked experimental and is not a release corpus. Do not substitute the historical
+`appsec-pretraining-v1` corpus or train on the held-out CyberWorkbench scorecard cases.
 
 ## Crypto corpus and evaluation
 

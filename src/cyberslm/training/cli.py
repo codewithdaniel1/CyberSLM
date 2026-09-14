@@ -8,7 +8,7 @@ from pathlib import Path
 from cyberslm.config import settings
 from cyberslm.knowledge import KnowledgeStore
 from cyberslm.training.corpus import export_huggingface_splits, load_records, validate_corpus
-from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts
+from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts, promote_crypto_ctf_drafts
 from cyberslm.training.pretraining import APPSEC_PRETRAINING_SOURCES, export_pretraining_corpus
 
 
@@ -50,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     crypto_ctf_drafts.add_argument("--count", type=int, default=60)
     crypto_ctf_drafts.add_argument("--seed", type=int, default=3407)
+    promote_crypto_ctf = commands.add_parser(
+        "promote-crypto-ctf-drafts",
+        help="Promote local synthetic drafts for an explicitly experimental Unsloth run",
+    )
+    promote_crypto_ctf.add_argument(
+        "--drafts", type=Path, default=Path("data/training/drafts/crypto-ctf-curriculum-v1.jsonl")
+    )
+    promote_crypto_ctf.add_argument(
+        "--output", type=Path, default=Path("data/training/crypto-ctf-sft-v0-experimental")
+    )
+    promote_crypto_ctf.add_argument("--reviewer", required=True)
+    promote_crypto_ctf.add_argument("--confirm-experimental-training", action="store_true")
     pretraining.add_argument("--output", type=Path, required=True)
     pretraining.add_argument(
         "--source",
@@ -192,6 +204,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             records = generate_crypto_ctf_drafts(args.output, count=args.count, seed=args.seed)
             print(f"Generated {len(records)} unapproved crypto-CTF drafts: {args.output}")
             print("Review and promote selected records before any training run.")
+        elif args.command == "promote-crypto-ctf-drafts":
+            if not args.confirm_experimental_training:
+                raise ValueError(
+                    "Promotion requires --confirm-experimental-training; "
+                    "this corpus is not release-ready"
+                )
+            paths = promote_crypto_ctf_drafts(args.drafts, args.output, reviewer=args.reviewer)
+            print(f"Experimental corpus: {paths['corpus']}")
+            print(f"Experimental manifest: {paths['manifest']}")
         else:
             run_training(args)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:

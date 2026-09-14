@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 import json
 import random
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -211,3 +213,76 @@ def generate_crypto_ctf_drafts(
         encoding="utf-8",
     )
     return records
+
+
+def promote_crypto_ctf_drafts(
+    draft_path: Path,
+    output_dir: Path,
+    *,
+    reviewer: str,
+) -> dict[str, Path]:
+    """Create an explicitly experimental reviewed corpus from local draft records.
+
+    This is intentionally a narrow bridge for an operator-approved smoke/candidate run.
+    It does not claim independent human review or make the corpus release-ready.
+    """
+    reviewer = reviewer.strip()
+    if not reviewer:
+        raise ValueError("reviewer must be a non-empty name or handle")
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(f"Refusing to overwrite non-empty output directory: {output_dir}")
+
+    records: list[dict[str, Any]] = []
+    for line_number, line in enumerate(draft_path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{draft_path}:{line_number}: invalid JSON") from exc
+        if not isinstance(record, dict):
+            raise ValueError(f"{draft_path}:{line_number}: expected a JSON object")
+        if record.get("review_status") != "draft":
+            raise ValueError(f"{draft_path}:{line_number}: expected an unapproved draft")
+        if record.get("approved_for_training") is not False:
+            raise ValueError(f"{draft_path}:{line_number}: draft approval state is invalid")
+        promoted = dict(record)
+        promoted["approved_for_training"] = True
+        promoted["review_status"] = "experimental-operator-approved"
+        promoted["split"] = promoted.pop("suggested_split", None)
+        if promoted["split"] not in {"train", "validation"}:
+            raise ValueError(f"{draft_path}:{line_number}: missing valid suggested_split")
+        records.append(promoted)
+    if not records:
+        raise ValueError("Draft file contains no records")
+
+    output_dir.mkdir(parents=True, exist_ok=False)
+    corpus_path = output_dir / "corpus.jsonl"
+    payload = "".join(json.dumps(record, sort_keys=True) + "\n" for record in records).encode()
+    corpus_path.write_bytes(payload)
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "dataset_version": "crypto-ctf-sft-v0-experimental",
+                "base_model": "unsloth/gemma-3-4b-it-unsloth-bnb-4bit",
+                "reviewer": reviewer,
+                "reviewed_at": datetime.now(UTC).isoformat(),
+                "allowed_licenses": ["Apache-2.0"],
+                "minimum_examples": len(records),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "experimental": True,
+                "limitations": [
+                    "Operator-approved synthetic curriculum only.",
+                    "Not independently reviewed or release-ready.",
+                    "Do not train on the held-out CyberWorkbench scorecard cases.",
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {"corpus": corpus_path, "manifest": manifest_path}

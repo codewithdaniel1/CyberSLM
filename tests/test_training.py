@@ -7,13 +7,17 @@ import pytest
 from cyberslm.knowledge.sources import KnowledgeSource
 from cyberslm.knowledge.store import KnowledgeStore
 from cyberslm.training.corpus import export_huggingface_splits, validate_corpus
-from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts
+from cyberslm.training.crypto_ctf import generate_crypto_ctf_drafts, promote_crypto_ctf_drafts
 from cyberslm.training.pretraining import export_pretraining_corpus
 from cyberslm.training.unsloth_run import (
     build_parser as build_unsloth_parser,
 )
 from cyberslm.training.unsloth_run import run as run_unsloth
 from cyberslm.training.unsloth_run import validate_pretraining_export
+from cyberslm.training.unsloth_sft import (
+    build_parser as build_unsloth_sft_parser,
+)
+from cyberslm.training.unsloth_sft import run as run_unsloth_sft
 
 
 def write_corpus(tmp_path: Path, *, private: bool = False) -> tuple[Path, Path]:
@@ -263,3 +267,44 @@ def test_crypto_ctf_draft_generator_is_deterministic_and_unapproved(tmp_path: Pa
     }
     assert all(record["approved_for_training"] is False for record in first)
     assert all(record["review_status"] == "draft" for record in first)
+
+
+def test_crypto_ctf_drafts_can_be_promoted_only_as_experimental(tmp_path: Path) -> None:
+    drafts = tmp_path / "drafts.jsonl"
+    generate_crypto_ctf_drafts(drafts, count=24, seed=7)
+
+    paths = promote_crypto_ctf_drafts(drafts, tmp_path / "promoted", reviewer="Test operator")
+    corpus = validate_corpus(paths["corpus"], paths["manifest"])
+
+    assert len(corpus.records) == 24
+    assert corpus.manifest["experimental"] is True
+    assert all(record["approved_for_training"] is True for record in corpus.records)
+    assert all(
+        record["review_status"] == "experimental-operator-approved"
+        for record in corpus.records
+    )
+    assert {record["split"] for record in corpus.records} == {"train", "validation"}
+
+
+def test_unsloth_sft_preflight_validates_experimental_corpus(tmp_path: Path) -> None:
+    drafts = tmp_path / "drafts.jsonl"
+    generate_crypto_ctf_drafts(drafts, count=24, seed=7)
+    paths = promote_crypto_ctf_drafts(drafts, tmp_path / "promoted", reviewer="Test operator")
+    args = build_unsloth_sft_parser().parse_args(
+        [
+            "--dataset",
+            str(paths["corpus"]),
+            "--manifest",
+            str(paths["manifest"]),
+            "--base-revision",
+            "1234567890abcdef",
+            "--confirm-experimental-training",
+            "--validate-only",
+        ]
+    )
+
+    result = run_unsloth_sft(args)
+
+    assert result["status"] == "validated"
+    assert result["records"] == 24
+    assert result["experimental"] is True

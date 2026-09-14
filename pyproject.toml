@@ -18,6 +18,7 @@ cyberslm-knowledge = "cyberslm.knowledge.cli:main"
 cyberslm-ollama = "cyberslm.ollama:main"
 cyberslm-train = "cyberslm.training.cli:main"
 cyberslm-unsloth = "cyberslm.training.unsloth_run:main"
+cyberslm-unsloth-sft = "cyberslm.training.unsloth_sft:main"
 
 [project.optional-dependencies]
 mlx = ["mlx-vlm>=0.3.4,<1"]

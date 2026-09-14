@@ -1,113 +1,143 @@
-# CyberSLM-Crypto Unsloth GPU run
+# CyberSLM-Crypto experimental Unsloth run
 
-This runbook is ready for the first crypto candidate, but is intentionally paused until the
-crypto corpus is source-reviewed and exported. Do not substitute the historical AppSec CWE/CAPEC
-corpus. Google Colab storage is temporary; download completed artifacts before ending a session.
+This run creates new LoRA adapter weights using supervised fine-tuning (SFT), not a prompt-only
+Ollama alias. It uses an original synthetic crypto-CTF curriculum for an **experimental candidate**.
+It is not a release, and it must not be trained on the CyberWorkbench scorecard's exact cases.
 
-## Before opening Colab
+Google Colab storage is temporary. Download the completed artifacts before the session ends.
 
-1. Push the current CyberSLM source revision to GitHub.
-2. Review the Gemma license and the terms for every approved crypto source in the corpus manifest.
-3. Select an NVIDIA GPU runtime in Colab. A T4 may be sufficient for the 4-bit LoRA smoke run;
-   an L4 or larger GPU is preferable for the complete run.
-4. Do not paste Hugging Face tokens into the notebook or repository. Use Colab Secrets if access
-   to a gated model requires a token.
+## What you need before starting
 
-## 1. Install the runner
+1. A Google account and a Colab notebook.
+2. An NVIDIA GPU runtime: choose **T4 GPU** or better under **Runtime → Change runtime type**.
+3. Access approval for Gemma on Hugging Face if Colab asks for it. Keep any Hugging Face token in
+   Colab Secrets; never paste it into a cell, dataset, or Git repository.
+4. The current CyberSLM source pushed to GitHub. The commands below use its public repository.
 
-Run these commands in Colab:
+## 1. Confirm the GPU and install the project
+
+Run this first cell in a new Colab notebook:
 
 ```bash
+!nvidia-smi
 !git clone https://github.com/codewithdaniel1/CyberSLM.git
 %cd CyberSLM
 !pip install -q unsloth
 !pip install -q -e .
-!nvidia-smi
 ```
 
-The Unsloth installation command may change with CUDA and PyTorch releases. If its official Gemma
-3 notebook specifies a different installation cell, use that cell and then rerun `pip install -e
-.` for CyberSLM.
+If Unsloth's current official Gemma 3 notebook gives a different installation cell for Colab,
+use that cell first, then rerun `!pip install -q -e .`.
 
-## 2. Export the approved crypto corpus
+## 2. Create the experimental curriculum locally in Colab
 
-The raw corpus is deliberately absent from Git history. This step is unavailable until the crypto
-source exporter has been built and its sources approved. At that point, the documented exporter
-will write `data/training/crypto-pretraining-v1/`; do not invent or substitute a corpus path.
-
-The resulting manifest must match the approved source versions, record counts, and archive hashes.
-The training runner independently verifies every exported file.
-
-## 3. Pin the base checkpoint
-
-Capture the exact immutable revision returned at the time of the run:
+This uses the checked-in deterministic generator. `Daniel Peng` is recorded as the local operator
+approval in the manifest; replace it with your preferred name/handle if needed.
 
 ```bash
-!python -c "from huggingface_hub import model_info; print(model_info('unsloth/gemma-3-4b-it-unsloth-bnb-4bit').sha)"
+!cyberslm-train generate-crypto-ctf-drafts
+!cyberslm-train promote-crypto-ctf-drafts \
+  --reviewer "Daniel Peng" \
+  --confirm-experimental-training
+!cyberslm-train validate \
+  --dataset data/training/crypto-ctf-sft-v0-experimental/corpus.jsonl \
+  --manifest data/training/crypto-ctf-sft-v0-experimental/manifest.json
 ```
 
-Store the full commit SHA in the Colab environment. Do not use `main` as the revision:
+Promotion is intentionally explicit: it marks the manifest and every record as
+`experimental-operator-approved`, not independently reviewed or release-ready.
 
-```bash
-%env CYBERSLM_BASE_REVISION=paste_full_commit_sha_here
+## 3. Pin the exact base checkpoint
+
+Run this cell and copy the full commit hash it prints. Do not replace it with `main`.
+
+```python
+from huggingface_hub import model_info
+
+CYBERSLM_BASE_REVISION = model_info(
+    "unsloth/gemma-3-4b-it-unsloth-bnb-4bit"
+).sha
+print(CYBERSLM_BASE_REVISION)
 ```
 
-## 4. Run the no-download preflight
+Then set it in a shell cell (replace the placeholder with the copied full hash):
 
 ```bash
-!cyberslm-unsloth \
+%env CYBERSLM_BASE_REVISION=paste_the_full_commit_hash_here
+```
+
+## 4. Run the no-GPU preflight
+
+This validates the corpus, manifest, provenance, review marker, and immutable base revision
+without downloading the base model or importing Unsloth:
+
+```bash
+!cyberslm-unsloth-sft \
+  --dataset data/training/crypto-ctf-sft-v0-experimental/corpus.jsonl \
+  --manifest data/training/crypto-ctf-sft-v0-experimental/manifest.json \
   --base-revision "$CYBERSLM_BASE_REVISION" \
-  --confirm-reviewed \
+  --confirm-experimental-training \
   --validate-only
 ```
 
-This should finish before any model is loaded.
+## 5. Run a five-step smoke training run
 
-## 5. Run a five-step smoke train
+This proves model access, GPU use, the Gemma 3 chat template, response-only loss, validation,
+and adapter saving. It is not a candidate to publish.
 
 ```bash
-!cyberslm-unsloth \
+!cyberslm-unsloth-sft \
+  --dataset data/training/crypto-ctf-sft-v0-experimental/corpus.jsonl \
+  --manifest data/training/crypto-ctf-sft-v0-experimental/manifest.json \
   --base-revision "$CYBERSLM_BASE_REVISION" \
-  --output data/adapters/gemma3-4b-cyberslm-crypto-smoke \
+  --output data/adapters/gemma3-4b-cyberslm-crypto-ctf-smoke \
   --max-steps 5 \
-  --confirm-reviewed \
+  --confirm-experimental-training \
   --skip-merge
 ```
 
-The smoke run proves CUDA loading, tokenization, forward/backward training, validation, and PEFT
-adapter saving. It is not a candidate model and must not be released.
+## 6. Run the first experimental candidate
 
-## 6. Run the first full candidate
-
-Use a new output directory so the smoke artifact cannot be mistaken for the candidate:
+Only after the smoke run completes, use a fresh output directory. One epoch is deliberately
+conservative for this small starting curriculum.
 
 ```bash
-!cyberslm-unsloth \
+!cyberslm-unsloth-sft \
+  --dataset data/training/crypto-ctf-sft-v0-experimental/corpus.jsonl \
+  --manifest data/training/crypto-ctf-sft-v0-experimental/manifest.json \
   --base-revision "$CYBERSLM_BASE_REVISION" \
-  --output data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1 \
+  --output data/adapters/gemma3-4b-cyberslm-crypto-ctf-sft-v0 \
   --epochs 1 \
-  --learning-rate 5e-5 \
-  --confirm-reviewed
+  --learning-rate 2e-5 \
+  --confirm-experimental-training
 ```
 
-This creates the PEFT adapter, trainer checkpoints, merged 16-bit Safetensors, and
-`cyberslm-training.json`. Training loss alone does not approve the candidate.
-
-## 7. Preserve the artifacts
-
-Download at minimum:
+The output contains:
 
 ```text
-data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/adapter/
-data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/merged/
-data/adapters/gemma3-4b-cyberslm-crypto-cpt-v1/cyberslm-training.json
+data/adapters/gemma3-4b-cyberslm-crypto-ctf-sft-v0/
+├── adapter/                  Portable PEFT Safetensors adapter and tokenizer files
+├── checkpoints/              Resumable trainer checkpoints
+├── merged/                   Merged 16-bit Safetensors checkpoint
+└── cyberslm-training.json    Exact base, corpus hash, settings, metrics, and environment
 ```
 
-The next local stage validates and hashes those files, reloads the adapter with plain
-Transformers, evaluates it against untouched Gemma 3 on the crypto suite, and only then converts
-an accepted candidate to GGUF for Ollama.
+## 7. Download artifacts and return here
+
+Download these folders/files from Colab:
+
+```text
+adapter/
+merged/
+cyberslm-training.json
+```
+
+Once you have them locally, tell me where you saved the downloaded output directory. I will verify
+its metadata and hashes, compare it with the untouched Gemma base and Foundation-Sec on held-out
+tests, and only then prepare a GGUF/Ollama import. `publish-local` refreshes the local Ollama
+definition; it cannot turn an adapter into new Ollama weights until this conversion stage is done.
 
 References:
 
 - [Official Unsloth Gemma 3 guide](https://unsloth.ai/docs/models/gemma-3-how-to-run-and-fine-tune)
-- [Official Unsloth continued-pretraining guide](https://unsloth.ai/docs/basics/continued-pretraining)
+- [Unsloth chat templates](https://unsloth.ai/docs/basics/chat-templates)

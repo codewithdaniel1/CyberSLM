@@ -25,6 +25,17 @@ Every generated record is deliberately marked `approved_for_training: false` and
 and promote selected records into a separate reviewed corpus with a new SHA-256 manifest. Do not
 train directly on the drafts or on the CyberWorkbench scorecard's exact cases.
 
+For the first owner-approved experiment, a separate explicit promotion command creates a manifest
+marked `experimental: true`; it does not claim independent review or release readiness:
+
+```bash
+uv run cyberslm-train promote-crypto-ctf-drafts \
+  --reviewer "Daniel Peng" \
+  --confirm-experimental-training
+```
+
+Use this corpus only with `cyberslm-unsloth-sft` and the [Colab SFT runbook](../docs/unsloth-colab.md).
+
 ## Reviewed-data gate
 
 There is no shipped production corpus. Each JSONL record must contain:
