@@ -15,6 +15,7 @@ dependencies = [
 cyberslm-benchmark = "cyberslm.benchmark:main"
 cyberslm-eval = "cyberslm.evaluation.cli:main"
 cyberslm-knowledge = "cyberslm.knowledge.cli:main"
+cyberslm-ollama = "cyberslm.ollama:main"
 cyberslm-train = "cyberslm.training.cli:main"
 cyberslm-unsloth = "cyberslm.training.unsloth_run:main"
 

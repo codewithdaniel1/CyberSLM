@@ -9,6 +9,17 @@ deferred. The target name includes the base family, size, and specialty:
 The checked-in Modelfile currently creates a development model from the untouched Gemma 3 4B
 base. It is a baseline, not yet a fine-tuned model.
 
+Republish the local alias whenever the tracked Modelfile changes or an accepted derived model is
+available:
+
+```bash
+uv run cyberslm-ollama publish-local
+```
+
+This updates the local `gemma3-4b-cyberslm-crypto:dev` alias and reuses existing Ollama weight
+layers. Training docs, curriculum drafts, and evaluation changes do not alter weights, so they do
+not change the scorecard until an actual fine-tune is promoted.
+
 ## Build and run the baseline
 
 Install and start Ollama, then run from the repository root:

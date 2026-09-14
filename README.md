@@ -108,6 +108,12 @@ ollama create gemma3-4b-cyberslm-crypto:dev -f ollama/Modelfile.gemma3-4b
 ollama run gemma3-4b-cyberslm-crypto:dev
 ```
 
+After a tracked Modelfile or accepted model-artifact update, republish the local alias with:
+
+```bash
+uv run cyberslm-ollama publish-local
+```
+
 An accepted release will be converted from the merged Safetensors candidate, not created as an
 Ollama-only model. See [the Ollama guide](docs/ollama.md).
 
